@@ -933,6 +933,7 @@ TXBitrateViewDelegate
 
 - (BOOL)onPlayerPixelBuffer:(CVPixelBufferRef)pixelBuffer;
 {
+    NSLog(@"--------------- pixel buffer ~");
     return NO;
 }
 

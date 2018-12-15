@@ -12,7 +12,9 @@
 #import "TCHttpUtil.h"
 #import "ScanQRController.h"
 #import "ReplayKit2Define.h"
+#ifndef DISABLE_VOD
 #import "TXVodPlayer.h"
+#endif
 #import "TXLivePush.h"
 #import "AddressBarController.h"
 #import "AppDelegate.h"
@@ -42,7 +44,9 @@
 @property (nonatomic, retain) UIButton* btnReplaykit;
 @property (nonatomic, copy) NSString *playFlvUrl;
 @property (nonatomic, retain) UIView* playerView;
+#ifndef DISABLE_VOD
 @property (nonatomic, retain) TXVodPlayer* vodPlayer;
+#endif
 @property (nonatomic, retain) UIButton* playBtn;
 @property (nonatomic, retain) UIButton* fullScreenBtn;
 @property (nonatomic, strong) AddressBarController *addressBarController;
@@ -64,8 +68,9 @@
 
 - (void)dealloc
 {
+#ifndef DISABLE_VOD
     [_vodPlayer stopPlay];
-
+#endif
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),kDarvinNotificaiotnNamePushStop,NULL,nil,YES);
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     
@@ -175,7 +180,7 @@
 //    _fullScreenBtn.backgroundColor = UIColor.redColor;
     [_fullScreenBtn addTarget:self action:@selector(onFullScreenClicked:) forControlEvents:UIControlEventTouchUpInside];
     [_playerView addSubview:_fullScreenBtn];
-    
+#ifndef DISABLE_VOD
     //播放演示视频
     _vodPlayer = [TXVodPlayer new];
     [_vodPlayer setIsAutoPlay:YES];
@@ -183,6 +188,7 @@
     [_vodPlayer setupVideoWidget:_playerView insertIndex:0];
     [_vodPlayer startPlay:@"http://1252463788.vod2.myqcloud.com/95576ef5vodtransgzp1252463788/1bfa444e7447398156520498412/v.f30.mp4"];
     _vodPlayer.vodDelegate = self;
+#endif
 }
 
 - (void)viewDidAppear:(BOOL)animated
@@ -192,6 +198,8 @@
 
 - (void)onPlayBtnClicked:(UIButton*)button
 {
+#ifndef DISABLE_VOD
+
     if (_vodPlayer.isPlaying) {
         [_playBtn setImage:[UIImage imageNamed:@"start"] forState:UIControlStateNormal];
         [_vodPlayer pause];
@@ -200,10 +208,14 @@
         [_playBtn setImage:[UIImage imageNamed:@"suspend"] forState:UIControlStateNormal];
         [_vodPlayer resume];
     }
+#endif
+
 }
 
 - (void)onFullScreenClicked:(UIButton*)button
 {
+#ifndef DISABLE_VOD
+
     if (_playerView.height != self.view.height) {
         _playerView.frame = self.view.bounds;
         [_vodPlayer setRenderRotation:HOME_ORIENTATION_RIGHT];
@@ -220,6 +232,8 @@
         _playBtn.transform = CGAffineTransformIdentity;
         [_vodPlayer setRenderRotation:HOME_ORIENTATION_DOWN];
     }
+#endif
+
 }
 
 - (void)addressBarControllerTapScanQR:(AddressBarController *)controller {
@@ -454,7 +468,7 @@
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),kDarvinNotificaiotnNameResolutionChange,NULL,nil,YES);
     
 }
-
+#ifndef DISABLE_VOD
 #pragma mark - VodDelegate
 - (void) onPlayEvent:(TXVodPlayer *)player event:(int)EvtID withParam:(NSDictionary*)param
 {
@@ -466,7 +480,7 @@
         [_vodPlayer pause];
     }
 }
-
+#endif
 
 #pragma mark - ScanQRDelegate
 - (void)onScanResult:(NSString *)result {

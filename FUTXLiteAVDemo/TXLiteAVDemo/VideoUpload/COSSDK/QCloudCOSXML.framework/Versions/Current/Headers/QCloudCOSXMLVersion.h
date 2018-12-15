@@ -6,11 +6,11 @@
 
 #ifndef QCloudCOSXMLModuleVersion_h
 #define QCloudCOSXMLModuleVersion_h
-#define QCloudCOSXMLModuleVersionNumber 504006
+#define QCloudCOSXMLModuleVersionNumber 505003
 
 //dependency
-#if QCloudCoreModuleVersionNumber != 504006 
-    #error "库QCloudCOSXML依赖QCloudCore最小版本号为5.4.6，当前引入的QCloudCore版本号过低，请及时升级后使用" 
+#if QCloudCoreModuleVersionNumber != 505003 
+    #error "库QCloudCOSXML依赖QCloudCore最小版本号为5.5.3，当前引入的QCloudCore版本号过低，请及时升级后使用" 
 #endif
 
 //

@@ -26,6 +26,7 @@
 
 - (void)setSelected:(BOOL)selected
 {
+    [super setSelected:selected];
     if(selected){
         self.label.textColor = UIColorFromRGB(0x0ACCAC);
     }

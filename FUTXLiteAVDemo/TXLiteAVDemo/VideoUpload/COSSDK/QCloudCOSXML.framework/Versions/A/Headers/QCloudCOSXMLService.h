@@ -28,9 +28,10 @@
 
 #import <Foundation/Foundation.h>
 #import <QCloudCore/QCloudService.h>
+#import <QCloudCore/QCloudCore.h>
+
 
 @interface QCloudCOSXMLService : QCloudService
-
 #pragma hidden super selectors
 - (int) performRequest:(QCloudBizHTTPRequest *)httpRequst NS_UNAVAILABLE;
 - (int) performRequest:(QCloudBizHTTPRequest *)httpRequst withFinishBlock:(QCloudRequestFinishBlock)block NS_UNAVAILABLE;
@@ -38,7 +39,7 @@
 #pragma Factory
 + (QCloudCOSXMLService*) defaultCOSXML;
 + (QCloudCOSXMLService*) cosxmlServiceForKey:(NSString*)key;
-
+#pragma hidden super selectors
 /**
  检查是否存在key对应的service
 
@@ -65,6 +66,5 @@
  @return object URL
  */
 - (NSString*)getURLWithBucket:(NSString*)bucket object:(NSString*)object withAuthorization:(BOOL)withAuthorization;
-
 
 @end

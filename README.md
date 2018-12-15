@@ -1,113 +1,91 @@
-# FUTXLiteAVDemo 快速接入文档
+# FUTXLiteAVDemo 快速集成文档
 
-FUTXLiteAVDemo 是  [腾讯直播全功能专业版](https://cloud.tencent.com/document/product/454/7873#iOS) 集成了 Faceunity 美颜、虚拟道具功能 的 Demo。
+FUTXLiteAVDemo 是集成了 Faceunity 面部跟踪和虚拟道具功能 和 [腾讯移动直播](https://cloud.tencent.com/document/product/454/7873) 功能的 Demo。
 
-本文是 FaceUnity SDK 快速对腾讯移动直播demo的导读说明，关于 `FaceUnity SDK` 的详细说明，请参看 [FULiveDemo](https://github.com/Faceunity/FULiveDemo/tree/dev)
+本文是 FaceUnity SDK 快速对接融云 腾讯移动直播 的快速导读说明，关于 `FaceUnity SDK` 的详细说明，请参看 [FULiveDemo](https://github.com/Faceunity/FULiveDemo/tree/dev)
 
 由于腾讯**TXLiteAVSDK_Professional.framework**库的大小过大，无法上传github，请参照[工程配置](工程配置(iOS).pdf)下载库并拷贝到相应位置。
 
+**注意：本例是示例 Demo , 只在 首页 --> 直播 --> 美女直播 --> 新建直播间 --> 开始直播 内 接入了 FaceUnity 效果，如需更多接入，请用户参照本例自行定义。** 
+
+## 主要文件说明
+
+**FUManager** 对 FaceUnity SDK 接口和数据的简单封装。
+**FUAPIDemoBar.framework** 展示 FaceUnity 效果的UI。
 ## 快速集成方法
 
-### 一、导入 SDK
+### 一、获取视频数据回调
 
-将 FaceUnity 文件夹全部拖入工程中，并且添加依赖库 OpenGLES.framework、Accelerate.framework、CoreMedia.framework、AVFoundation.framework、stdc++.tbd
-
-### 二、快速加载道具
-
-在 LiveRoomPusherViewController.m 的  `viewDidLoad` 中调用快速加载道具函数，该函数会创建一个美颜道具及指定的贴纸道具。
-
-```c
-[[FUManager shareManager] loadItems];
-```
-
-注：FUManager 的 shareManager 函数中会对 SDK 进行初始化，并设置默认的美颜参数。
-
-### 三、图像处理
-
-在  `LiveRoom.m` 房间管理类中，添加视频回调监听,在回调里将视频数据通过`renderItemWithTexture`传入FaceUnity SDK处理
-
-```c
-/* add faceU */
-_livePusher.videoProcessDelegate = self;
-
-#pragma mark - TXVideoCustomProcessDelegate  -------------- add by faceU
-- (GLuint)onPreProcessTexture:(GLuint)texture width:(CGFloat)width height:(CGFloat)height
-{
-   return [[FUManager shareManager] renderItemWithTexture:texture Width:width Height:height] ;
-}
-```
-
-### 四、切换道具及调整美颜参数
-
-本例中通过添加 FUAPIDemoBar 来实现切换道具及调整美颜参数的具体实现，FUAPIDemoBar 是快速集成用的UI，客户可自定义UI。
-
-1、在 LiveRoomPusherViewController.m 中添加头文件，并创建 demoBar 属性
+1、在 `LiveRoom.m` 内修改 `- (void)initLivePusher` 方法如下：
 
 ```C
-#import <FUAPIDemoBar/FUAPIDemoBar.h>
-
-@property (nonatomic, strong) FUAPIDemoBar *demoBar ;
-```
-
-2、在 demoBar 的 get 方法中对其进行初始化，并遵循代理  FUAPIDemoBarDelegate，实现代理方法 `demoBarDidSelectedItem:` 和 `demoBarBeautyParamChanged`以进一步实现道具的切换及美颜参数的调整。
-
-初始化
-
-```C
-// demobar 初始化
--(FUAPIDemoBar *)demoBar {
-    if (!_demoBar) {
-        _demoBar = [[FUAPIDemoBar alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height - 220, self.view.frame.size.width, 164)];
+- (void)initLivePusher {
+    if (_livePusher == nil) {
+        TXLivePushConfig *config = [[TXLivePushConfig alloc] init];
+        config.pauseImg = [UIImage imageNamed:@"pause_publish.jpg"];
+        config.pauseFps = 15;
+        config.pauseTime = 300;
+       
+        _videoQuality = VIDEO_QUALITY_HIGH_DEFINITION;
+        _livePusher = [[TXLivePush alloc] initWithConfig:config];
+        _livePusher.delegate = self;
         
-        _demoBar.itemsDataSource = [FUManager shareManager].itemsDataSource;
-        _demoBar.selectedItem = [FUManager shareManager].selectedItem ;
+        // 增加此代理，拿到视频数据回调
+        _livePusher.videoProcessDelegate = self ;
         
-        _demoBar.filtersDataSource = [FUManager shareManager].filtersDataSource ;
-        _demoBar.beautyFiltersDataSource = [FUManager shareManager].beautyFiltersDataSource ;
-        _demoBar.filtersCHName = [FUManager shareManager].filtersCHName ;
-        _demoBar.selectedFilter = [FUManager shareManager].selectedFilter ;
-        [_demoBar setFilterLevel:[FUManager shareManager].selectedFilterLevel forFilter:[FUManager shareManager].selectedFilter] ;
-        
-        _demoBar.skinDetectEnable = [FUManager shareManager].skinDetectEnable;
-        _demoBar.blurShape = [FUManager shareManager].blurShape ;
-        _demoBar.blurLevel = [FUManager shareManager].blurLevel ;
-        _demoBar.whiteLevel = [FUManager shareManager].whiteLevel ;
-        _demoBar.redLevel = [FUManager shareManager].redLevel;
-        _demoBar.eyelightingLevel = [FUManager shareManager].eyelightingLevel ;
-        _demoBar.beautyToothLevel = [FUManager shareManager].beautyToothLevel ;
-        _demoBar.faceShape = [FUManager shareManager].faceShape ;
-        
-        _demoBar.enlargingLevel = [FUManager shareManager].enlargingLevel ;
-        _demoBar.thinningLevel = [FUManager shareManager].thinningLevel ;
-        _demoBar.enlargingLevel_new = [FUManager shareManager].enlargingLevel_new ;
-        _demoBar.thinningLevel_new = [FUManager shareManager].thinningLevel_new ;
-        _demoBar.jewLevel = [FUManager shareManager].jewLevel ;
-        _demoBar.foreheadLevel = [FUManager shareManager].foreheadLevel ;
-        _demoBar.noseLevel = [FUManager shareManager].noseLevel ;
-        _demoBar.mouthLevel = [FUManager shareManager].mouthLevel ;
-        
-        _demoBar.delegate = self;
+        [_livePusher setVideoQuality:_videoQuality adjustBitrate:NO adjustResolution:NO];
+        [_livePusher setLogViewMargin:UIEdgeInsetsMake(120, 10, 60, 10)];
+        config.videoEncodeGop = 5;
+        [_livePusher setConfig:config];
     }
-    return _demoBar ;
 }
+
 ```
 
-切换贴纸代理方法
+2、在 `LiveRoom.m` 内遵循代理 `TXVideoCustomProcessDelegate`
+
+3、实现 `TXVideoCustomProcessDelegate ` 中的代理方法如下：
 
 ```C
-/**      FUAPIDemoBarDelegate       **/
+- (GLuint)onPreProcessTexture:(GLuint)texture width:(CGFloat)width height:(CGFloat)height {
+    
+    if ([FUManager shareManager].showFaceUnityEffect) {
+        texture = [[FUManager shareManager] renderItemWithTexture:texture Width:width Height:height];
+    }
+    
+    return texture ;
+}
 
-// 切换贴纸
+```
+
+### 二、接入 Faceunity SDK
+
+将  FaceUnity  文件夹全部拖入工程中，并且添加依赖库 OpenGLES.framework、Accelerate.framework、CoreMedia.framework、AVFoundation.framework、stdc++.tbd
+
+#### 1、快速加载道具
+
+在 `LiveRoomPusherViewController.m` 的 `- (void)viewWillAppear:(BOOL)animated ` 方法中 调用 `[[FUManager shareManager] loadItems]` 加载贴纸道具及美颜道具如下：
+
+```C
+[[FUManager shareManager] loadItems];
+[self.view addSubview:self.demoBar];
+[FUManager shareManager].showFaceUnityEffect = YES ;
+```
+
+
+#### 2、道具切换
+
+调用 `[[FUManager shareManager] loadItem: itemName];` 切换道具
+
+#### 3、更新美颜参数
+
+```C
 - (void)demoBarDidSelectedItem:(NSString *)itemName {
     
     [[FUManager shareManager] loadItem:itemName];
 }
-```
 
-更新美颜参数方法
 
-```C
-// 更新美颜参数
 - (void)demoBarBeautyParamChanged {
     
     [FUManager shareManager].skinDetectEnable = _demoBar.skinDetectEnable;
@@ -130,22 +108,11 @@ _livePusher.videoProcessDelegate = self;
     [FUManager shareManager].selectedFilter = _demoBar.selectedFilter ;
     [FUManager shareManager].selectedFilterLevel = _demoBar.selectedFilterLevel;
 }
+
 ```
 
-3、在 `viewDidLoad:` 中将 demoBar 添加到页面上
+#### 4、道具销毁
 
-```C
-[self.view addSubview:self.demoBar];
-```
+调用 `[[FUManager shareManager] destoryItems];` 销毁贴纸及美颜道具。
 
-
-
-### **五**、道具销毁
-
-视频录制结束时需要销毁道具
-
-```c
-[[FUManager shareManager] destoryItems]
-```
-
-**快速集成完毕，关于 FaceUnity SDK 的更多详细说明，请参看 [FULiveDemo](https://github.com/Faceunity/FULiveDemo/tree/dev)**
+**注：关于 `FaceUnity SDK` 的详细说明，请参看 [FULiveDemo](https://github.com/Faceunity/FULiveDemo/tree/dev)**

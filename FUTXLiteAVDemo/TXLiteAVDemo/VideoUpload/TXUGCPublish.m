@@ -159,6 +159,13 @@
     return result;
 }
 
+-(void) setAppId: (int) appId
+{
+    if (_tvcClient != nil) {
+        [_tvcClient setAppId:appId];
+    }
+}
+
 /*
  * 获取上报信息
  */

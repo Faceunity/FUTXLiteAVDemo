@@ -345,6 +345,17 @@ static NSString *tvc_combineTwoFingerPrint(unsigned char *fp1,unsigned char *fp2
     return NetworkType;
 }
 
++ (NSString *) tvc_getAppName {
+    NSDictionary *infoDict = [[NSBundle mainBundle] infoDictionary];
+    NSString *appname = [infoDict objectForKey:@"CFBundleDisplayName"];
+    return appname;
+}
+
++ (NSString *) tvc_getPackageName {
+    NSDictionary *infoDict = [[NSBundle mainBundle] infoDictionary];
+    NSString *packname = [infoDict objectForKey:@"CFBundleIdentifier"];
+    return packname;
+}
 
 + (NSString *)tvc_deviceModelName
 {

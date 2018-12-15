@@ -8,7 +8,7 @@
 
 #import <Foundation/Foundation.h>
 #import "TXPlayerAuthParams.h"
-#import "SuperPlayerModel.h"
+
 
 @interface TXMoviePlayInfoResponse : NSObject
 

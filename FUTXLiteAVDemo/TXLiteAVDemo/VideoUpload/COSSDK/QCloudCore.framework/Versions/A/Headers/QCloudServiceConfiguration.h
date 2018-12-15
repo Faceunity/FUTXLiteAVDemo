@@ -28,7 +28,19 @@
 /**
  您的服务所在的区域,请您一定要设置该参数！
  */
-@property (nonatomic, copy) QCloudEndPoint* endpoint;
+@property (nonatomic, strong) QCloudEndPoint* endpoint;
+/**
+ 是否开启了后台传输，默认是NO
+ */
+@property (nonatomic, assign) BOOL backgroundEnable;
+/**
+ 后台传输的标识
+ */
+@property (nonatomic, strong) NSString* backgroundIdentifier;
+/**
+ 是否在4G的网络下开启后台传输，默认是NO
+ */
+@property (nonatomic, assign) BOOL backgroundIn4GEnable;
 @end
 
 

@@ -8,6 +8,7 @@
 
 #import <UIKit/UIKit.h>
 #import "TXMoviePlayInfoResponse.h"
+#import "SuperPlayer.h"
 
 @interface ListVideoUrl : NSObject
 @property NSString *title;
@@ -30,7 +31,7 @@
 
 @interface ListVideoCell : UITableViewCell
 
-- (void)setDataSource:(ListVideoModel *)source;
+@property ListVideoModel *dataSource;
 - (SuperPlayerModel *)getPlayerModel;
 
 @end

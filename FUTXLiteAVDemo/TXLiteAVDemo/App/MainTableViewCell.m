@@ -8,7 +8,7 @@
 
 #import "MainTableViewCell.h"
 #import "ColorMacro.h"
-#import "UIView+MMLayout.h"
+
 
 @implementation CellInfo
 - (id)init {
@@ -20,7 +20,7 @@
 
 
 @interface MainTableViewCell () {
-    UIImageView*         _backgroundView;
+    UIView*         _backgroundView;
     UIImageView*    _iconImageView;
     UILabel*        _titleLabel;
     UIImageView*    _detailImageView;
@@ -43,7 +43,7 @@
         self.backgroundColor = UIColor.clearColor;
         self.selectionStyle = UITableViewCellSelectionStyleNone;
         
-        _backgroundView = [UIView new];
+        _backgroundView = [[UIView alloc] init];
         [self addSubview:_backgroundView];
         
         _iconImageView = [[UIImageView alloc] init];
@@ -74,9 +74,10 @@
         _backgroundView.frame = CGRectMake(0, 0, self.frame.size.width, 50);
     }
     
-    _titleLabel.m_centerY().m_left(25);
-    _iconImageView.m__center(CGPointMake(_backgroundView.mm_w-41, _backgroundView.mm_halfH));
-    _detailImageView.m__center(CGPointMake(_backgroundView.mm_w-41, _backgroundView.mm_halfH));
+    _titleLabel.center = CGPointMake(_titleLabel.center.x, _titleLabel.superview.frame.size.height/2);
+    _titleLabel.frame = CGRectMake(25, _titleLabel.frame.origin.y, _titleLabel.frame.size.width, _titleLabel.frame.size.height);
+    _iconImageView.center = (CGPointMake(_backgroundView.frame.size.width-41, _backgroundView.frame.size.height/2));
+    _detailImageView.center = (CGPointMake(_backgroundView.frame.size.width-41, _backgroundView.frame.size.height/2));
     
     if (_cellData.subCells != nil) {
         _iconImageView.hidden = NO;
@@ -92,7 +93,7 @@
 - (void)setCellData:(CellInfo*)cellInfo
 {
     _cellData = cellInfo;
-    UIImage* image = [UIImage imageNamed:cellInfo.iconName];
+    UIImage* image = cellInfo.iconName != nil ? [UIImage imageNamed:cellInfo.iconName] : nil;
     _iconImageView.image = image;
     [_iconImageView sizeToFit];
     _titleLabel.text = cellInfo.title;

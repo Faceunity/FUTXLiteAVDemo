@@ -18,6 +18,10 @@
 #import <UserNotifications/UserNotifications.h>
 #import <objc/message.h>
 
+#ifdef ENABLE_UGC
+#import "TXUGCBase.h"
+#endif
+
 #define BUGLY_APP_ID @"18a2342254"
 
 NSString *helpUrlDb[] = {
@@ -63,12 +67,11 @@ NSString *helpUrlDb[] = {
     config.channel = @"LiteAV Demo";
     
     [Bugly startWithAppId:BUGLY_APP_ID config:config];
-    Class TXUGCBase = NSClassFromString(@"TXUGCBase");
-    if (TXUGCBase != Nil) {
-        SEL action = NSSelectorFromString(@"setLicenceURL:key:");
-        void (*objc_setLicence)(id, SEL, NSString*, NSString*) = (void(*)(id, SEL, NSString*, NSString*))objc_msgSend;
-        objc_setLicence(TXUGCBase, action, @"http://ugc-licence-test-1252463788.file.myqcloud.com/RDM_Enterprise.licence", @"9bc74ac7bfd07ea392e8fdff2ba5678a");
-    }
+#ifdef ENABLE_UGC
+    [TXUGCBase setLicenceURL:@"http://ugc-licence-test-1252463788.file.myqcloud.com/RDM_Enterprise.licence" key:@"9bc74ac7bfd07ea392e8fdff2ba5678a"];
+//    [TXUGCBase setLicenceURL:@"https://xiaoshipin-1251610319.cos.ap-chengdu.myqcloud.com/enterprisepro.license" key:@"9bc74ac7bfd07ea392e8fdff2ba5678a"];
+#endif
+
     NSLog(@"rtmp demo init crash report");
 
     // Override point for customization after application launch.
@@ -119,7 +122,6 @@ NSString *helpUrlDb[] = {
                               }];
     }
 
-    
     return YES;
 }
 

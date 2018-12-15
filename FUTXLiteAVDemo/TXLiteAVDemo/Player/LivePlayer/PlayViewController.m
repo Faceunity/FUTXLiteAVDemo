@@ -350,7 +350,8 @@ ScanQRDelegate
         if (self.isRealtime) {
             self.title = @"低延时播放";
         } else {
-            self.addressBarController.text = @"rtmp://live.hkstv.hk.lxdns.com/live/hks";
+//            self.addressBarController.text = @"rtmp://live.hkstv.hk.lxdns.com/live/hks";
+            self.addressBarController.text = @"http://5815.liveplay.myqcloud.com/live/5815_89aad37e06ff11e892905cb9018cf0d4.flv";
         }
     } else {
         self.title = @"点播播放器";
@@ -1259,6 +1260,7 @@ ScanQRDelegate
 }
 
 - (BOOL)onPlayerPixelBuffer:(CVPixelBufferRef)pixelBuffer {
+    NSLog(@"--------------- pixel buffer ~");
     return NO;
 }
 @end

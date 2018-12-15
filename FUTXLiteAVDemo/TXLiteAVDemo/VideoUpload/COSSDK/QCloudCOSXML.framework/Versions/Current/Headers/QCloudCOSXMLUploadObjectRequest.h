@@ -27,19 +27,13 @@ typedef void(^InitMultipleUploadFinishBlock)(QCloudInitiateMultipartUploadResult
  上传文件（对象）的文件名，也是对象的key，请注意文件名中不可以含有问号即"?"字符
  */
 @property (strong, nonatomic) NSString *object;
-
-
 /**
  存储桶名称
  */
 @property (strong, nonatomic) NSString *bucket;
 
 
-/**
- 在进行HTTP请求的时候，您可以通过设置该参数来设置自定义的一些头部信息。
- 
- */
-@property (strong, nonatomic) NSDictionary* customHeaders;
+
 /**
  需要上传的对象内容。可以传入NSData*或者NSURL*类型的变量
  */
@@ -114,6 +108,17 @@ typedef void(^InitMultipleUploadFinishBlock)(QCloudInitiateMultipartUploadResult
  */
 @property (nonatomic, copy) InitMultipleUploadFinishBlock initMultipleUploadFinishBlock;
 
+
+/**
+ 是否在上传完成以后，将 COS 返回的文件MD5与本地文件算出来的md5进行校验。默认开启，如果校验出错，文件仍然会被上传到 COS, 不过我们会在本地抛出校验失败的error。
+ */
+@property (nonatomic, assign) BOOL enableMD5Verification;
+
+/*
+ 在进行HTTP请求的时候，可以通过设置该参数来设置自定义的一些头部信息。
+ 通常情况下，携带特定的额外HTTP头部可以使用某项功能，如果是这类需求，可以通过设置该属性来实现。
+ */
+@property (strong, nonatomic) NSMutableDictionary* customHeaders;
 /**
  上传完成后会通过该block回调。若error为空，可视为成功。
 
@@ -126,4 +131,7 @@ typedef void(^InitMultipleUploadFinishBlock)(QCloudInitiateMultipartUploadResult
 
 
 - (void) abort:(QCloudRequestFinishBlock)finishBlock;
+-(void)setCOSServerSideEncyption;
+-(void)setCOSServerSideEncyptionWithCustomerKey:(NSString *)customerKey;
+-(void)setCOSServerSideEncyptionWithKMSCustomKey:(NSString *)customerKey jsonStr:(NSString *)jsonStr;
 @end

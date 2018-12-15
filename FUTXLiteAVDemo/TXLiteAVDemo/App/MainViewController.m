@@ -18,7 +18,7 @@
 #endif
 #endif
 #ifdef ENABLE_UGC
-#import "VideoConfigureViewController.h"
+#import "VideoRecordConfigViewController.h"
 #import "QBImagePickerController.h"
 #import "SuperPlayer.h"
 #endif
@@ -27,7 +27,7 @@
 #import "ColorMacro.h"
 #import "MainTableViewCell.h"
 #import "TXLiveBase.h"
-#import "UIView+MMLayout.h"
+
 
 #define STATUS_BAR_HEIGHT [UIApplication sharedApplication].statusBarFrame.size.height
 
@@ -73,6 +73,7 @@ UIAlertViewDelegate
     _cellInfos = [NSMutableArray new];
     CellInfo* cellInfo = nil;
     
+#ifdef ENABLE_PUSH
     cellInfo = [CellInfo new];
     cellInfo.title = @"直播";
     cellInfo.iconName = @"live_room";
@@ -80,17 +81,16 @@ UIAlertViewDelegate
     cellInfo.subCells = ({
         NSMutableArray *subCells = [NSMutableArray new];
         CellInfo* scellInfo;
+#ifdef ENABLE_PLAY
         scellInfo = [CellInfo new];
         scellInfo.title = @"美女直播";
         scellInfo.navigateToController = @"LiveRoomListViewController";
         [subCells addObject:scellInfo];
-        
-#ifdef ENABLE_PUSH
+#endif
         scellInfo = [CellInfo new];
         scellInfo.title = @"录屏直播";
         scellInfo.navigateToController = @"Replaykit2ViewController";
         [subCells addObject:scellInfo];
-#endif
         
         scellInfo = [CellInfo new];
         scellInfo.title = @"小直播";
@@ -99,8 +99,11 @@ UIAlertViewDelegate
         
         subCells;
     });
-    
-    
+#endif
+
+#if defined(ENABLE_PLAY) && !defined(DISABLE_VOD)
+
+
     cellInfo = [CellInfo new];
     cellInfo.title = @"播放器";
     cellInfo.iconName = @"composite";
@@ -108,15 +111,15 @@ UIAlertViewDelegate
     cellInfo.subCells = ({
         NSMutableArray *subCells = [NSMutableArray new];
         CellInfo* scellInfo;
-#ifndef DISABLE_VOD
         scellInfo = [CellInfo new];
         scellInfo.title = @"超级播放器";
         scellInfo.navigateToController = @"MoviePlayerViewController";
         [subCells addObject:scellInfo];
-#endif
-        
         subCells;
+    
     });
+#endif
+    
 #ifdef ENABLE_UGC
     cellInfo = [CellInfo new];
     cellInfo.title = @"短视频";
@@ -128,7 +131,7 @@ UIAlertViewDelegate
         
         scellInfo = [CellInfo new];
         scellInfo.title = @"视频录制";
-        scellInfo.navigateToController = @"VideoConfigureViewController";
+        scellInfo.navigateToController = @"VideoRecordConfigViewController";
         [subCells addObject:scellInfo];
         
 #ifndef UGC_SMART        
@@ -162,6 +165,8 @@ UIAlertViewDelegate
         subCells;
     });
 #endif
+    
+#if defined(ENABLE_PLAY) && defined(ENABLE_PUSH)
     cellInfo = [CellInfo new];
     cellInfo.title = @"视频通话";
     cellInfo.iconName = @"multi_room";
@@ -182,6 +187,7 @@ UIAlertViewDelegate
         
         subCells;
     });
+#endif
     
     cellInfo = [CellInfo new];
     cellInfo.title = @"调试工具";
@@ -208,15 +214,20 @@ UIAlertViewDelegate
         scellInfo.title = @"点播播放器";
         scellInfo.navigateToController = @"PlayVodViewController";
         [subCells addObject:scellInfo];
+#if 0
+        scellInfo = [CellInfo new];
+        scellInfo.title = @"下载";
+        scellInfo.navigateToController = @"DownloadViewController";
+        [subCells addObject:scellInfo];
 #endif
-        
+#endif
+#if defined(ENABLE_PLAY) && defined(ENABLE_PUSH)
+
         scellInfo = [CellInfo new];
         scellInfo.title = @"WebRTC Room";
         scellInfo.navigateToController = @"WebRTCViewController";
         [subCells addObject:scellInfo];
-        
-        
-        
+#endif
         subCells;
     });
 }
@@ -235,7 +246,7 @@ UIAlertViewDelegate
     lbHeadLine.font = [UIFont systemFontOfSize:24];
     [lbHeadLine sizeToFit];
     [self.view addSubview:lbHeadLine];
-    lbHeadLine.m_centerX();
+    lbHeadLine.center = CGPointMake(lbHeadLine.superview.center.x, lbHeadLine.center.y);
     
     lbHeadLine.userInteractionEnabled = YES;
     UITapGestureRecognizer* tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
@@ -271,17 +282,18 @@ UIAlertViewDelegate
     [self.view addSubview:lbSubHead];
     lbSubHead.userInteractionEnabled = YES;
     [lbSubHead addGestureRecognizer:tapGesture];
-    lbSubHead.m_bottom(34).m_centerX();
-    
+    lbSubHead.frame = CGRectMake(lbSubHead.frame.origin.x, self.view.frame.size.height-lbSubHead.frame.size.height-34, lbSubHead.frame.size.width, lbSubHead.frame.size.height);
+    lbSubHead.center = CGPointMake(lbSubHead.superview.frame.size.width/2, lbSubHead.center.y);
     
     //功能列表
-    int tableviewY = lbSubHead.frame.origin.y + lbSubHead.frame.size.height + 30;
+    int tableviewY = lbSubHead.frame.origin.y + lbSubHead.frame.size.height + 12;
     _tableView = [[UITableView alloc] initWithFrame:CGRectMake(originX, tableviewY, width, self.view.frame.size.height - tableviewY)];
     _tableView.backgroundColor = UIColor.clearColor;
     _tableView.delegate = self;
     _tableView.dataSource = self;
     [self.view addSubview:_tableView];
-    _tableView.m_top(lbHeadLine.mm_maxY+12).m_flexToBottom(0);
+    _tableView.frame = CGRectMake(_tableView.frame.origin.x, lbHeadLine.frame.origin.y+lbHeadLine.frame.size.height+12, _tableView.frame.size.width, _tableView.superview.frame.size.height);
+    _tableView.frame = CGRectMake(_tableView.frame.origin.x, _tableView.frame.origin.y, _tableView.frame.size.width, _tableView.superview.frame.size.height-_tableView.frame.origin.y);
     
     UIView *view = [UIView new];
     view.backgroundColor = [UIColor clearColor];
@@ -317,7 +329,6 @@ UIAlertViewDelegate
 {
     return _cellInfos.count;
 }
-
 
 - (UITableViewCell*)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
@@ -404,8 +415,8 @@ UIAlertViewDelegate
     
     
 #ifdef ENABLE_UGC
-    if ([controller isKindOfClass:[VideoConfigureViewController class]]) {
-        controller = [[VideoConfigureViewController alloc] initWithNibName:@"VideoConfigureViewController" bundle:nil];
+    if ([controller isKindOfClass:[VideoRecordConfigViewController class]]) {
+        controller = [[VideoRecordConfigViewController alloc] initWithNibName:@"VideoRecordConfigViewController" bundle:nil];
     }
     if ([controller isKindOfClass:[QBImagePickerController class]]) {
         QBImagePickerController* imagePicker = ((QBImagePickerController*)controller);
@@ -445,16 +456,18 @@ UIAlertViewDelegate
 //        }
     }
     if ([cellInfo.title isEqualToString:@"小视频"]) {
-        NSString *urlStr = [NSString stringWithFormat:@"itms-apps://itunes.apple.com/WebObjects/MZStore.woa/wa/viewSoftware?id=%@", @"1374099214"];
-        
+//        NSString *urlStr = [NSString stringWithFormat:@"itms-apps://itunes.apple.com/WebObjects/MZStore.woa/wa/viewSoftware?id=%@", @"1374099214"];
+        NSString *urlStr = [NSString stringWithFormat:@"http://itunes.apple.com/cn/app/id1374099214?mt=8"];
         //打开链接地址
         [[UIApplication sharedApplication] openURL:[NSURL URLWithString:urlStr]];
         
         return;
     }
+#endif
+#ifdef ENABLE_PUSH
     if ([cellInfo.title isEqualToString:@"小直播"]) {
-        NSString *urlStr = [NSString stringWithFormat:@"itms-apps://itunes.apple.com/WebObjects/MZStore.woa/wa/viewSoftware?id=%@", @"1132521667"];
-        
+//        NSString *urlStr = [NSString stringWithFormat:@"itms-apps://itunes.apple.com/WebObjects/MZStore.woa/wa/viewSoftware?id=%@", @"1132521667"];
+        NSString *urlStr = [NSString stringWithFormat:@"http://itunes.apple.com/cn/app/id1132521667?mt=8"];
         //打开链接地址
         [[UIApplication sharedApplication] openURL:[NSURL URLWithString:urlStr]];
         

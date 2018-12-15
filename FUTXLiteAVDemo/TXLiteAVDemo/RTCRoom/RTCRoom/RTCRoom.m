@@ -942,7 +942,7 @@ typedef void (^IGetPusherListCompletionHandler)(int errCode, NSString *errMsg, R
                 }];
             }
                     
-        } else if (EvtID == PUSH_ERR_NET_DISCONNECT) {
+        } else if (EvtID == PUSH_ERR_NET_DISCONNECT || EvtID == PUSH_ERR_INVALID_ADDRESS) {
             NSString *errMsg = @"推流断开，请检查网络设置";
             if (_createRoomCompletion) {
                 _createRoomCompletion(ROOM_ERR_CREATE_ROOM, errMsg);

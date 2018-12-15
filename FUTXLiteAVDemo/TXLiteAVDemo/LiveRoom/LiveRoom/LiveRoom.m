@@ -7,12 +7,14 @@
 //
 
 #import "LiveRoom.h"
-#import "TXLiveSDKTypeDef.h"
+//#import "TXUGCRecord"
 #import "TXLivePush.h"
 #import "TXLivePlayer.h"
 #import "AFNetworking.h"
 #import "RoomMsgMgr.h"
 #import "RoomUtil.h"
+
+
 #import "FUManager.h"
 
 // 业务服务器API
@@ -31,7 +33,7 @@
 #define kHttpServerAddr_MergeStream     @"merge_stream"
 
 
-@interface LiveRoom() <TXLivePushListener,TXVideoCustomProcessDelegate, IRoomLivePlayListener, RoomMsgListener> {
+@interface LiveRoom() <TXLivePushListener, IRoomLivePlayListener, RoomMsgListener, TXVideoCustomProcessDelegate> {
     TXLivePush              *_livePusher;
     NSMutableDictionary     *_livePlayerDic;  // [userID, player]
     NSMutableDictionary     *_playerEventDic; // [userID, RoomLivePlayListenerWrapper]
@@ -73,6 +75,16 @@
 
 @implementation LiveRoom
 
+- (GLuint)onPreProcessTexture:(GLuint)texture width:(CGFloat)width height:(CGFloat)height {
+    
+    if ([FUManager shareManager].showFaceUnityEffect) {
+        texture = [[FUManager shareManager] renderItemWithTexture:texture Width:width Height:height];
+    }
+    
+    return texture ;
+}
+
+
 - (instancetype)init {
     if (self = [super init]) {
         [self initLivePusher];
@@ -110,8 +122,9 @@
         _livePusher = [[TXLivePush alloc] initWithConfig:config];
         _livePusher.delegate = self;
         
-        /* add faceU */
-        _livePusher.videoProcessDelegate = self;
+        // 增加此代理，拿到视频数据回调
+        _livePusher.videoProcessDelegate = self ;
+        
         [_livePusher setVideoQuality:_videoQuality adjustBitrate:NO adjustResolution:NO];
         [_livePusher setLogViewMargin:UIEdgeInsetsMake(120, 10, 60, 10)];
         config.videoEncodeGop = 5;
@@ -277,7 +290,8 @@ typedef void (^block)();
                                 
                                 player = [[TXLivePlayer alloc] init];
                                 player.delegate = playerEventWrapper;
-                                
+                                [player setRenderMode:RENDER_MODE_FILL_EDGE];
+
                                 [_livePlayerDic setObject:player forKey:_roomCreator];
                                 [_playerEventDic setObject:playerEventWrapper forKey:_roomCreator];
                             }
@@ -1477,7 +1491,7 @@ typedef void (^IGetPusherListCompletionHandler)(int errCode, NSString *errMsg, R
                 }];
             }
             
-        } else if (EvtID == PUSH_ERR_NET_DISCONNECT) {
+        } else if (EvtID == PUSH_ERR_NET_DISCONNECT || EvtID == PUSH_ERR_INVALID_ADDRESS) {
             NSString *errMsg = @"推流断开，请检查网络设置";
             if (_createRoomCompletion) {
                 _createRoomCompletion(ROOM_ERR_CREATE_ROOM, errMsg);
@@ -1520,12 +1534,6 @@ typedef void (^IGetPusherListCompletionHandler)(int errCode, NSString *errMsg, R
 
 -(void) onNetStatus:(NSDictionary*)param {
     
-}
-
-#pragma mark - TXVideoCustomProcessDelegate  -------------- add by faceU
-- (GLuint)onPreProcessTexture:(GLuint)texture width:(CGFloat)width height:(CGFloat)height
-{
-   return [[FUManager shareManager] renderItemWithTexture:texture Width:width Height:height] ;
 }
 
 

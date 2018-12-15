@@ -20,7 +20,7 @@ typedef NS_ENUM(NSInteger, LinkMicStatus) {
     LinkMicStatus_BEING,         // 连麦中
 };
 
-@interface LiveRoomPlayerViewController (){
+@interface LiveRoomPlayerViewController () {
     UIView                   *_playerView;     // 大画面(大主播)
     UIView                   *_pusherView;     // 自己作为小主播时的推流画面
     NSMutableDictionary      *_playerViewDic;  // 其他小主播的画面，[userID, view]
@@ -643,6 +643,5 @@ typedef NS_ENUM(NSInteger, LinkMicStatus) {
         }
     }];
 }
-
 
 @end

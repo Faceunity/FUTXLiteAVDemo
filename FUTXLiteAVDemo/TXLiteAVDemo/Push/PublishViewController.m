@@ -384,7 +384,7 @@ AddressBarControllerDelegate
     NSDictionary *dict = param;
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (EvtID == PUSH_ERR_NET_DISCONNECT) {
+        if (EvtID == PUSH_ERR_NET_DISCONNECT || EvtID == PUSH_ERR_INVALID_ADDRESS) {
             [self clickPublish:_btnPublish];
         } else if (EvtID == PUSH_WARNING_HW_ACCELERATION_FAIL) {
             _txLivePublisher.config.enableHWAcceleration = false;
@@ -1453,7 +1453,7 @@ static vm_size_t get_app_consumed_memory_bytes() {
 {
     //NSLog(@"custom %d, %f, %f", texture, width, height);
 //    return texture;
-
+    NSlog(@"-------------------- texture ~");
     if (_filter == nil) {
         _filter = [[CustomProcessFilter alloc] init];
     }

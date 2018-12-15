@@ -118,15 +118,11 @@ request.partNumber = 1; // 标志当前分块的序号
     */
 @property (strong, nonatomic) NSString *sourceIfNoneMatch;
 /**
-    指定源文件的版本号
+    指定 Object 的 Version ID （在开启了多版本的情况下）
     */
 @property (strong, nonatomic) NSString *versionID;
 
-/*
-在进行HTTP请求的时候，可以通过设置该参数来设置自定义的一些头部信息。
-通常情况下，携带特定的额外HTTP头部可以使用某项功能，如果是这类需求，可以通过设置该属性来实现。
-*/
-@property (strong, nonatomic) NSDictionary* customHeaders;
+
 
 - (void) setFinishBlock:(void (^)(QCloudCopyObjectResult* result, NSError * error))QCloudRequestFinishBlock;
 @end

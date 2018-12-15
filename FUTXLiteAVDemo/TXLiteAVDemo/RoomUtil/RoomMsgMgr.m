@@ -107,24 +107,6 @@ typedef void (^block)();
     }];
 }
 
-- (void)createRoom:(NSString *)groupID groupName:(NSString *)groupName completion:(IRoomMsgMgrCompletion)completion {
-    [self asyncRun:^{
-        __weak __typeof(self) weakSelf = self;
-        [[TIMGroupManager sharedInstance] createGroup:@"AVChatRoom" groupId:groupID groupName:groupName succ:^(NSString *groupId) {
-            weakSelf.isOwner = YES;
-            weakSelf.ownerGroupID = groupID;
-            
-            if (completion) {
-                completion(0, nil);
-            }
-        } fail:^(int code, NSString *msg) {
-            if (completion) {
-                completion(code, msg);
-            }
-        }];
-    }];
-}
-
 - (void)enterRoom:(NSString *)groupID completion:(IRoomMsgMgrCompletion)completion {
     [self asyncRun:^{
         __weak __typeof(self) weakSelf = self;

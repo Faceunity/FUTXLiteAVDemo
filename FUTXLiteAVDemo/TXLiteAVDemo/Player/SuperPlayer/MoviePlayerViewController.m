@@ -19,6 +19,9 @@
 #import "UIView+MMLayout.h"
 #import "J2Obj.h"
 #import "AppDelegate.h"
+#import "SuperPlayerGuideView.h"
+#import "AFNetworking.h"
+#import "UIImageView+WebCache.h"
 #define LIST_VIDEO_CELL_ID @"LIST_VIDEO_CELL_ID"
 #define LIST_LIVE_CELL_ID @"LIST_LIVE_CELL_ID"
 
@@ -52,6 +55,8 @@ __weak UITextField *urlField;
 @property MBProgressHUD *hud;
 @property UIButton *addBtn;
 
+@property SuperPlayerGuideView *guideView;
+
 @property UIScrollView  *scrollView;    //视频列表滑动scrollview
 
 @end
@@ -69,6 +74,7 @@ __weak UITextField *urlField;
 
 - (void)dealloc {
     NSLog(@"%@释放了",self.class);
+    SuperPlayerWindowShared.superPlayer = nil;
 }
 
 - (void)willMoveToParentViewController:(nullable UIViewController *)parent
@@ -124,6 +130,33 @@ __weak UITextField *urlField;
     self.navigationItem.leftBarButtonItems = @[leftItem];
     
     self.title = @"超级播放器";
+    
+    
+    
+    // guide view
+    NSUserDefaults *df = [NSUserDefaults standardUserDefaults];
+    if (![df boolForKey:@"isShowGuide"]) {
+        if (_guideView == nil)
+            _guideView = [[SuperPlayerGuideView alloc] initWithFrame:self.view.frame];
+        [self.view addSubview:_guideView];
+        [_guideView mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.top.equalTo(_playerFatherView.mas_top);
+            make.left.mas_equalTo(0);
+            make.right.mas_equalTo(0);
+            make.bottom.mas_equalTo(0);
+        }];
+        _playerView.isLockScreen = YES;
+        __weak SuperPlayerView *wplayer = _playerView;
+        _guideView.missHandler = ^{
+            wplayer.isLockScreen = NO;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self showControlView:NO];
+                
+                [df setBool:YES forKey:@"isShowGuide"];
+                [df synchronize];
+            });
+        };
+    }
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -164,9 +197,9 @@ __weak UITextField *urlField;
         _isPlayDefaultVideo = NO;
         
         SuperPlayerModel *playerModel = [[SuperPlayerModel alloc] init];
-        playerModel.title            = @"上传视频";
         playerModel.videoURL         = self.videoURL;
         [self.playerView playWithModel:playerModel];
+        [self.playerView.controlView setTitle:@"上传视频"];
     }
     
     self.playerFatherView = [[UIView alloc] init];
@@ -280,6 +313,11 @@ __weak UITextField *urlField;
     if (_isPlayDefaultVideo) {
         TXPlayerAuthParams *p = [TXPlayerAuthParams new];
         p.appId = 1252463788;
+        p.fileId = @"5285890781763144364";
+        [_authParamArray addObject:p];
+        
+        p = [TXPlayerAuthParams new];
+        p.appId = 1252463788;
         p.fileId = @"4564972819220421305";
         [_authParamArray addObject:p];
         
@@ -325,6 +363,8 @@ __weak UITextField *urlField;
         }];
     }
     
+    SuperPlayerGlobleConfigShared.playShiftDomain = @"vcloudtimeshift.qcloud.com";
+    
     AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
     [manager GET:@"http://xzb.qcloud.com/get_live_list" parameters:nil progress:nil success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
         [manager invalidateSessionCancelingTasks:YES];
@@ -351,8 +391,15 @@ __weak UITextField *urlField;
         [_liveListView reloadData];
         
         if (allList.count > 0 && _isPlayDefaultVideo) {
+            [self.playerView.controlView setTitle:[_liveDataSourceArray[0] title]];
             [self.playerView playWithModel:[_liveDataSourceArray[0] getPlayerModel]];
+            if (self.guideView) {
+                [self showControlView:YES];
+            }
         }
+        
+
+        
     } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
         [manager invalidateSessionCancelingTasks:YES];
     }];
@@ -382,7 +429,7 @@ __weak UITextField *urlField;
 
 #pragma mark - SuperPlayerDelegate
 
-- (void)onPlayerBackAction {
+- (void)superPlayerBackAction:(id)sender {
     [self backClick];
 }
 
@@ -395,6 +442,8 @@ __weak UITextField *urlField;
         _playerView.fatherView = _playerFatherView;
         // 设置代理
         _playerView.delegate = self;
+        
+        [self setupDanmakuData];
     }
     return _playerView;
 }
@@ -455,8 +504,7 @@ __weak UITextField *urlField;
     // 状态条的方向旋转的方向,来判断当前屏幕的方向
     UIInterfaceOrientation orientation = [UIApplication sharedApplication].statusBarOrientation;
     // 是竖屏时候响应关
-    if (orientation == UIInterfaceOrientationPortrait && SuperPlayerGlobleConfigShared.enableFloatWindow &&
-        (self.playerView.state == StatePlaying) && _isPlayDefaultVideo) {
+    if (orientation == UIInterfaceOrientationPortrait && (self.playerView.state == StatePlaying) && _isPlayDefaultVideo) {
         [SuperPlayerWindowShared setSuperPlayer:self.playerView];
         [SuperPlayerWindowShared show];
         SuperPlayerWindowShared.backController = self;
@@ -481,10 +529,9 @@ __weak UITextField *urlField;
 {
     self.textView.text = result;
     SuperPlayerModel *model = [SuperPlayerModel new];
-    model.title            = @"这是新播放的视频";
     model.videoURL         = result;
     
-    
+    [self.playerView.controlView setTitle: @"这是新播放的视频"];
     [self.playerView playWithModel:model];
     
     ListVideoModel *m = [ListVideoModel new];
@@ -591,6 +638,8 @@ __weak UITextField *urlField;
 {
     ListVideoCell *cell = [tableView cellForRowAtIndexPath:indexPath];
     if (cell) {
+        [self.playerView.controlView setTitle:[cell dataSource].title];
+        [self.playerView.coverImageView sd_setImageWithURL:[NSURL URLWithString:[cell dataSource].coverUrl]];
         [self.playerView playWithModel:[cell getPlayerModel]];
     }
 }
@@ -600,7 +649,57 @@ __weak UITextField *urlField;
     return NO;
 }
 
+#define kRandomColor [UIColor colorWithRed:arc4random_uniform(256) / 255.0 green:arc4random_uniform(256) / 255.0 blue:arc4random_uniform(256) / 255.0 alpha:1]
+#define font [UIFont systemFontOfSize:15]
 
+- (void)setupDanmakuData
+{
+    NSString *danmakufile = [[NSBundle mainBundle] pathForResource:@"danmakufile" ofType:nil];
+    NSArray *danmakusDicts = [NSArray arrayWithContentsOfFile:danmakufile];
+    
+    NSMutableArray* danmakus = [NSMutableArray array];
+    for (NSDictionary* dict in danmakusDicts) {
+        CFDanmaku* danmaku = [[CFDanmaku alloc] init];
+        NSMutableAttributedString *contentStr = [[NSMutableAttributedString alloc] initWithString:dict[@"m"] attributes:@{NSFontAttributeName : font, NSForegroundColorAttributeName : kRandomColor}];
+        
+        NSString* emotionName = [NSString stringWithFormat:@"smile_%u", arc4random_uniform(90)];
+        UIImage* emotion = [UIImage imageNamed:emotionName];
+        NSTextAttachment* attachment = [[NSTextAttachment alloc] init];
+        attachment.image = emotion;
+        attachment.bounds = CGRectMake(0, -font.lineHeight*0.3, font.lineHeight*1.5, font.lineHeight*1.5);
+        NSAttributedString* emotionAttr = [NSAttributedString attributedStringWithAttachment:attachment];
+        
+        [contentStr appendAttributedString:emotionAttr];
+        danmaku.contentStr = contentStr;
+        
+        NSString* attributesStr = dict[@"p"];
+        NSArray* attarsArray = [attributesStr componentsSeparatedByString:@","];
+        danmaku.timePoint = [[attarsArray firstObject] doubleValue] / 1000;
+        danmaku.position = [attarsArray[1] integerValue];
+        //        if (danmaku.position != 0) {
+        
+        [danmakus addObject:danmaku];
+        //        }
+    }
+    
+    CFDanmakuView *_danmakuView = [[CFDanmakuView alloc] initWithFrame:CGRectZero];
+    _danmakuView.duration = 6.5;
+    _danmakuView.centerDuration = 2.5;
+    _danmakuView.lineHeight = 25;
+    _danmakuView.maxShowLineCount = 15;
+    _danmakuView.maxCenterLineCount = 5;
+    [_danmakuView prepareDanmakus:danmakus];
+    
+    self.playerView.danmakuView = _danmakuView;
+}
+
+- (void)showControlView:(BOOL)isShow {
+    if (isShow) {
+        self.playerView.controlView.hidden = NO;
+    } else {
+        self.playerView.controlView.hidden = YES;
+    }
+}
 #pragma mark - ScrollView Delegate
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView;

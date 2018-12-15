@@ -16,11 +16,11 @@
 #import "UIViewController+BackButtonHandler.h"
 #import "LiveRoomListViewController.h"
 #import "LiveRoomPlayerItemView.h"
-#import "TXLivePush.h"
 
-/* faceU */
-#import <FUAPIDemoBar/FUAPIDemoBar.h>
+
+
 #import "FUManager.h"
+#import <FUAPIDemoBar/FUAPIDemoBar.h>
 
 typedef NS_ENUM(NSInteger, PKStatus) {
     PKStatus_IDLE,         // 空闲状态
@@ -34,15 +34,14 @@ typedef NS_ENUM(NSInteger, PKStatus) {
                 BeautySettingPanelDelegate,
                 UITableViewDelegate,
                 UITableViewDataSource,
-                FUAPIDemoBarDelegate,
-                TXVideoCustomProcessDelegate
+
+                FUAPIDemoBarDelegate
                 > {
     UIView                   *_pusherView;
     NSMutableDictionary      *_playerViewDic;  // 小主播的画面，[userID, view]
     NSMutableDictionary      *_playerItemDic;  // 小主播的loading画面，[userID, playerItem]
     
-   // BeautySettingPanel       *_vBeauty;  // 美颜界面组件
-
+    BeautySettingPanel       *_vBeauty;  // 美颜界面组件
     
     UIButton                 *_btnChat;
     UIButton                 *_btnCamera;
@@ -77,9 +76,11 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     NSArray                  *_roomCreatorList;     // 所有的房间主播列表(不包括自己），用于作为PK的目标
     UITableView              *_roomCreatorListView; // 用于展示主播列表
 }
-@property(nonatomic,strong)FUAPIDemoBar *demoBar;
-@end
 
+
+
+@property (nonatomic, strong) FUAPIDemoBar *demoBar ;
+@end
 
 @implementation LiveRoomPusherViewController
 
@@ -93,12 +94,9 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     _appIsInActive = NO;
     _appIsBackground = NO;
     _hasPendingRequest = NO;
-        
+    
     [self initUI];
     [self initRoomLogic];
-    
-    /* faceU */
-    [[FUManager shareManager] loadItems];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -106,7 +104,96 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     
     self.navigationController.navigationBar.hidden = NO;
     self.navigationController.interactivePopGestureRecognizer.enabled = NO;
+    
+    [[FUManager shareManager] loadItems];
+    [self.view addSubview:self.demoBar];
+    [FUManager shareManager].showFaceUnityEffect = YES ;
 }
+
+
+-(FUAPIDemoBar *)demoBar {
+    if (!_demoBar) {
+        
+        _demoBar = [[FUAPIDemoBar alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height - 164 -50, self.view.frame.size.width, 164)];
+        
+        _demoBar.itemsDataSource = [FUManager shareManager].itemsDataSource;
+        _demoBar.selectedItem = [FUManager shareManager].selectedItem ;
+        
+        _demoBar.filtersDataSource = [FUManager shareManager].filtersDataSource ;
+        _demoBar.beautyFiltersDataSource = [FUManager shareManager].beautyFiltersDataSource ;
+        _demoBar.filtersCHName = [FUManager shareManager].filtersCHName ;
+        _demoBar.selectedFilter = [FUManager shareManager].selectedFilter ;
+        [_demoBar setFilterLevel:[FUManager shareManager].selectedFilterLevel forFilter:[FUManager shareManager].selectedFilter] ;
+        
+        _demoBar.skinDetectEnable = [FUManager shareManager].skinDetectEnable;
+        _demoBar.blurShape = [FUManager shareManager].blurShape ;
+        _demoBar.blurLevel = [FUManager shareManager].blurLevel ;
+        _demoBar.whiteLevel = [FUManager shareManager].whiteLevel ;
+        _demoBar.redLevel = [FUManager shareManager].redLevel;
+        _demoBar.eyelightingLevel = [FUManager shareManager].eyelightingLevel ;
+        _demoBar.beautyToothLevel = [FUManager shareManager].beautyToothLevel ;
+        _demoBar.faceShape = [FUManager shareManager].faceShape ;
+        
+        _demoBar.enlargingLevel = [FUManager shareManager].enlargingLevel ;
+        _demoBar.thinningLevel = [FUManager shareManager].thinningLevel ;
+        _demoBar.enlargingLevel_new = [FUManager shareManager].enlargingLevel_new ;
+        _demoBar.thinningLevel_new = [FUManager shareManager].thinningLevel_new ;
+        _demoBar.jewLevel = [FUManager shareManager].jewLevel ;
+        _demoBar.foreheadLevel = [FUManager shareManager].foreheadLevel ;
+        _demoBar.noseLevel = [FUManager shareManager].noseLevel ;
+        _demoBar.mouthLevel = [FUManager shareManager].mouthLevel ;
+        
+        _demoBar.delegate = self;
+    }
+    return _demoBar ;
+}
+
+/**      FUAPIDemoBarDelegate       **/
+
+- (void)demoBarDidSelectedItem:(NSString *)itemName {
+    
+    [[FUManager shareManager] loadItem:itemName];
+}
+
+- (void)demoBarBeautyParamChanged {
+    
+    [FUManager shareManager].skinDetectEnable = _demoBar.skinDetectEnable;
+    [FUManager shareManager].blurShape = _demoBar.blurShape;
+    [FUManager shareManager].blurLevel = _demoBar.blurLevel ;
+    [FUManager shareManager].whiteLevel = _demoBar.whiteLevel;
+    [FUManager shareManager].redLevel = _demoBar.redLevel;
+    [FUManager shareManager].eyelightingLevel = _demoBar.eyelightingLevel;
+    [FUManager shareManager].beautyToothLevel = _demoBar.beautyToothLevel;
+    [FUManager shareManager].faceShape = _demoBar.faceShape;
+    [FUManager shareManager].enlargingLevel = _demoBar.enlargingLevel;
+    [FUManager shareManager].thinningLevel = _demoBar.thinningLevel;
+    [FUManager shareManager].enlargingLevel_new = _demoBar.enlargingLevel_new;
+    [FUManager shareManager].thinningLevel_new = _demoBar.thinningLevel_new;
+    [FUManager shareManager].jewLevel = _demoBar.jewLevel;
+    [FUManager shareManager].foreheadLevel = _demoBar.foreheadLevel;
+    [FUManager shareManager].noseLevel = _demoBar.noseLevel;
+    [FUManager shareManager].mouthLevel = _demoBar.mouthLevel;
+    
+    [FUManager shareManager].selectedFilter = _demoBar.selectedFilter ;
+    [FUManager shareManager].selectedFilterLevel = _demoBar.selectedFilterLevel;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
@@ -143,8 +230,8 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     }
     
     // 美颜初始化为默认值
-    //    [_vBeauty resetValues];
-    //    [_vBeauty trigglerValues];
+    [_vBeauty resetValues];
+    [_vBeauty trigglerValues];
     
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
@@ -289,15 +376,12 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     [self.view addSubview:_msgInputView];
     
     // 美颜
-//    NSUInteger controlHeight = [BeautySettingPanel getHeight];
-//    _vBeauty = [[BeautySettingPanel alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height - controlHeight, self.view.frame.size.width, controlHeight)];
-//    _vBeauty.hidden = YES;
-//    _vBeauty.delegate = self;
-//    [self.view addSubview:_vBeauty];
+    NSUInteger controlHeight = [BeautySettingPanel getHeight];
+    _vBeauty = [[BeautySettingPanel alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height - controlHeight, self.view.frame.size.width, controlHeight)];
+    _vBeauty.hidden = YES;
+    _vBeauty.delegate = self;
+    [self.view addSubview:_vBeauty];
     
-    //faceU 美颜
-    [self.view addSubview:self.demoBar];
-
     // 主播列表(用于PK)
     _roomCreatorListView = [[UITableView alloc] initWithFrame:CGRectMake((_btnPK.left + _btnPK.right) / 2.0 - 50, _btnPK.top-250, 128, 230)];
     _roomCreatorListView.hidden = YES;
@@ -321,8 +405,8 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     [_liveRoom startLocalPreview:_pusherView];
     
     // 美颜初始化为默认值
-//    [_vBeauty resetValues];
-//    [_vBeauty trigglerValues];
+    [_vBeauty resetValues];
+    [_vBeauty trigglerValues];
 }
 
 - (void)relayout {
@@ -392,8 +476,8 @@ typedef NS_ENUM(NSInteger, PKStatus) {
 
 // 设置美颜
 - (void)clickBeauty:(UIButton *)btn {
-    _demoBar.hidden = NO;
-    [self.view bringSubviewToFront:_demoBar];
+    _vBeauty.hidden = NO;
+    [self.view bringSubviewToFront:_vBeauty];
     [self hideToolButtons:YES];
 }
 
@@ -887,7 +971,7 @@ typedef NS_ENUM(NSInteger, PKStatus) {
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [_msgInputTextField resignFirstResponder];
-    _demoBar.hidden = YES;
+    _vBeauty.hidden = YES;
     _roomCreatorListView.hidden = YES;
     [self hideToolButtons:NO];
     
@@ -936,7 +1020,7 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     _msgListCoverView.hidden = YES;
     
     [_msgInputTextField resignFirstResponder];
-    _demoBar.hidden = YES;
+    _vBeauty.hidden = YES;
     _roomCreatorListView.hidden = YES;
     [self hideToolButtons:NO];
 }
@@ -1093,84 +1177,6 @@ typedef NS_ENUM(NSInteger, PKStatus) {
         });
     });
 }
-
-
-
-#pragma  mark ----  faceU start  -----
-// demobar 初始化
--(FUAPIDemoBar *)demoBar{
-    if (!_demoBar) {
-        _demoBar = [[FUAPIDemoBar alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height - 164, self.view.frame.size.width, 164)];
-        
-        _demoBar.itemsDataSource = [FUManager shareManager].itemsDataSource;
-        _demoBar.selectedItem = [FUManager shareManager].selectedItem ;
-        
-        _demoBar.filtersDataSource = [FUManager shareManager].filtersDataSource ;
-        _demoBar.beautyFiltersDataSource = [FUManager shareManager].beautyFiltersDataSource ;
-        _demoBar.filtersCHName = [FUManager shareManager].filtersCHName ;
-        _demoBar.selectedFilter = [FUManager shareManager].selectedFilter ;
-        [_demoBar setFilterLevel:[FUManager shareManager].selectedFilterLevel forFilter:[FUManager shareManager].selectedFilter] ;
-        
-        _demoBar.skinDetectEnable = [FUManager shareManager].skinDetectEnable;
-        _demoBar.blurShape = [FUManager shareManager].blurShape ;
-        _demoBar.blurLevel = [FUManager shareManager].blurLevel ;
-        _demoBar.whiteLevel = [FUManager shareManager].whiteLevel ;
-        _demoBar.redLevel = [FUManager shareManager].redLevel;
-        _demoBar.eyelightingLevel = [FUManager shareManager].eyelightingLevel ;
-        _demoBar.beautyToothLevel = [FUManager shareManager].beautyToothLevel ;
-        _demoBar.faceShape = [FUManager shareManager].faceShape ;
-        
-        _demoBar.enlargingLevel = [FUManager shareManager].enlargingLevel ;
-        _demoBar.thinningLevel = [FUManager shareManager].thinningLevel ;
-        _demoBar.enlargingLevel_new = [FUManager shareManager].enlargingLevel_new ;
-        _demoBar.thinningLevel_new = [FUManager shareManager].thinningLevel_new ;
-        _demoBar.jewLevel = [FUManager shareManager].jewLevel ;
-        _demoBar.foreheadLevel = [FUManager shareManager].foreheadLevel ;
-        _demoBar.noseLevel = [FUManager shareManager].noseLevel ;
-        _demoBar.mouthLevel = [FUManager shareManager].mouthLevel ;
-        _demoBar.hidden = YES;
-        _demoBar.delegate = self;
-    }
-    return _demoBar ;
-}
-
-/**      FUAPIDemoBarDelegate       **/
-
-// 切换贴纸
-- (void)demoBarDidSelectedItem:(NSString *)itemName {
-    
-    [[FUManager shareManager] loadItem:itemName];
-}
-
-
-// 更新美颜参数
-- (void)demoBarBeautyParamChanged {
-    
-    [FUManager shareManager].skinDetectEnable = _demoBar.skinDetectEnable;
-    [FUManager shareManager].blurShape = _demoBar.blurShape;
-    [FUManager shareManager].blurLevel = _demoBar.blurLevel ;
-    [FUManager shareManager].whiteLevel = _demoBar.whiteLevel;
-    [FUManager shareManager].redLevel = _demoBar.redLevel;
-    [FUManager shareManager].eyelightingLevel = _demoBar.eyelightingLevel;
-    [FUManager shareManager].beautyToothLevel = _demoBar.beautyToothLevel;
-    [FUManager shareManager].faceShape = _demoBar.faceShape;
-    [FUManager shareManager].enlargingLevel = _demoBar.enlargingLevel;
-    [FUManager shareManager].thinningLevel = _demoBar.thinningLevel;
-    [FUManager shareManager].enlargingLevel_new = _demoBar.enlargingLevel_new;
-    [FUManager shareManager].thinningLevel_new = _demoBar.thinningLevel_new;
-    [FUManager shareManager].jewLevel = _demoBar.jewLevel;
-    [FUManager shareManager].foreheadLevel = _demoBar.foreheadLevel;
-    [FUManager shareManager].noseLevel = _demoBar.noseLevel;
-    [FUManager shareManager].mouthLevel = _demoBar.mouthLevel;
-    
-    [FUManager shareManager].selectedFilter = _demoBar.selectedFilter ;
-    [FUManager shareManager].selectedFilterLevel = _demoBar.selectedFilterLevel;
-}
-
-
-#pragma  mark ----  faceU End  -----
-
-
 
 @end
 

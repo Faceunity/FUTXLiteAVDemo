@@ -34,9 +34,7 @@
     SuperPlayerModel *model = [SuperPlayerModel new];
     model.appId = [self appId];
     model.fileId = [self fileId];
-    model.title = [self title];
     model.videoURL = self.url;
-    model.placeholderImageURLString = [self coverUrl];
     
     if (self.hdUrl) {
         NSMutableArray *array = @[].mutableCopy;
@@ -61,7 +59,7 @@
 @end
 
 @implementation ListVideoCell {
-    ListVideoModel *_source;
+    
 }
 
 - (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier
@@ -120,10 +118,10 @@
 
 - (void)setDataSource:(ListVideoModel *)source;
 {
-    _source = source;
+    _dataSource = source;
     
     int duration = source.duration;
-    [self.thumb sd_setImageWithURL:[NSURL URLWithString:_source.coverUrl]
+    [self.thumb sd_setImageWithURL:[NSURL URLWithString:_dataSource.coverUrl]
                   placeholderImage:SuperPlayerImage(@"loading_bgView")];
     if (source.type == 0) {
         self.durationLabel.text = [NSString stringWithFormat:@"%02d:%02d", duration / 60, duration % 60];
@@ -133,7 +131,7 @@
 
 - (SuperPlayerModel *)getPlayerModel
 {
-    return [_source getPlayerModel];
+    return [_dataSource getPlayerModel];
 }
 
 @end

@@ -46,3 +46,8 @@ helpbtn.tag = Help_##NAME; \
 UIBarButtonItem *rightItem = [[UIBarButtonItem alloc] initWithCustomView:helpbtn]; \
 self.navigationItem.rightBarButtonItems = @[rightItem];
 
+#define HelpBtnConfig(helpbtn, x) \
+helpbtn.tag = Help_##x; \
+[helpbtn addTarget:[[UIApplication sharedApplication] delegate] action:@selector(clickHelp:) forControlEvents:UIControlEventTouchUpInside]; 
+
+

@@ -8,29 +8,50 @@
 
 #import <UIKit/UIKit.h>
 
-typedef NS_ENUM(NSInteger,DemoFilterType) {
-    FilterType_None 		= 0,
-    FilterType_white        ,   //美白滤镜
-    FilterType_langman 		,   //浪漫滤镜
-    FilterType_qingxin 		,   //清新滤镜
-    FilterType_weimei 		,   //唯美滤镜
-    FilterType_fennen 		,   //粉嫩滤镜
-    FilterType_huaijiu 		,   //怀旧滤镜
-    FilterType_landiao 		,   //蓝调滤镜
-    FilterType_qingliang    ,   //清凉滤镜
-    FilterType_rixi 		,   //日系滤镜
+/**
+ * 美颜类型
+ */
+typedef NS_ENUM(NSInteger, PanelBeautyStyle) {
+    /// 光滑
+    PanelBeautyStyle_STYLE_SMOOTH     = 0,
+    /// 自然
+    PanelBeautyStyle_STYLE_NATURE     = 1,
+    /// pitu美颜
+    PanelBeautyStyle_STYLE_PITU       = 2,
 };
 
-typedef NS_ENUM(NSUInteger, PannelMenuIndex) {
-    PannelMenuIndexBeauty,
-    PannelMenuIndexEffect,
-    PannelMenuIndexMotion,
-    PannelMenuIndexKoubei,
-    PannelMenuIndexGreen
+
+typedef NS_ENUM(NSUInteger, PanelMenuIndex) {
+    PanelMenuIndexBeauty,
+    PanelMenuIndexFilter,
+    PanelMenuIndexMotion,
+    PanelMenuIndexKoubei,
+    PanelMenuIndexGreen
+};
+
+typedef NS_ENUM(NSInteger, FilterType) {
+    FilterType_None         = 0,
+    FilterType_normal,
+    FilterType_yinghong,
+    FilterType_yunshang,
+    FilterType_chunzhen,
+    FilterType_bailan,
+    FilterType_yuanqi,
+    FilterType_chaotuo,
+    FilterType_xiangfen,
+    FilterType_white        ,   //美白滤镜
+    FilterType_langman      ,   //浪漫滤镜
+    FilterType_qingxin      ,   //清新滤镜
+    FilterType_weimei       ,   //唯美滤镜
+    FilterType_fennen       ,   //粉嫩滤镜
+    FilterType_huaijiu      ,   //怀旧滤镜
+    FilterType_landiao      ,   //蓝调滤镜
+    FilterType_qingliang    ,   //清凉滤镜
+    FilterType_rixi         ,   //日系滤镜
 };
 
 @protocol BeautySettingPanelDelegate <NSObject>
-- (void)onSetBeautyStyle:(int)beautyStyle beautyLevel:(float)beautyLevel whitenessLevel:(float)whitenessLevel ruddinessLevel:(float)ruddinessLevel;
+- (void)onSetBeautyStyle:(NSUInteger)beautyStyle beautyLevel:(float)beautyLevel whitenessLevel:(float)whitenessLevel ruddinessLevel:(float)ruddinessLevel;
 - (void)onSetMixLevel:(float)mixLevel;
 - (void)onSetEyeScaleLevel:(float)eyeScaleLevel;
 - (void)onSetFaceScaleLevel:(float)faceScaleLevel;
@@ -55,13 +76,15 @@ typedef NS_ENUM(NSUInteger, PannelMenuIndex) {
 @interface BeautySettingPanel : UIView
 @property (nonatomic, assign) NSInteger currentFilterIndex;
 @property (nonatomic, readonly) NSString* currentFilterName;
+
 @property (nonatomic, weak) id<BeautySettingPanelDelegate> delegate;
 @property (nonatomic, weak) id<BeautyLoadPituDelegate> pituDelegate;
 
 - (void)resetValues;
 - (void)trigglerValues;
 + (NSUInteger)getHeight;
-- (void)changeFunction:(PannelMenuIndex)i;
+- (void)changeFunction:(PanelMenuIndex)i;
 - (UIImage*)filterImageByIndex:(NSInteger)index;
 - (float)filterMixLevelByIndex:(NSInteger)index;
+
 @end
