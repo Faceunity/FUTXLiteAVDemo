@@ -1,0 +1,25 @@
+{
+    "questionList": [
+                     {
+                     "question": "12.我国古代哪个朝代的“状元”最多？",
+                     "answer_1": "A.唐朝",
+                     "answer_2": "B.清朝",
+                     "answer_3": "C.宋朝",
+                     "correct_index": 1
+                     },
+                     {
+                     "question": "4.螃蟹有几条腿？",
+                     "answer_1": "A.八条",
+                     "answer_2": "B.十条",
+                     "answer_3": "C.六条",
+                     "correct_index": 2
+                     },
+                     {
+                     "question": "3.扑克牌中黑桃Q的人物原型是谁？",
+                     "answer_1": "A.雅典娜",
+                     "answer_2": "B.圣女贞德",
+                     "answer_3": "C.玛利亚",
+                     "correct_index": 1
+                     }
+                     ]
+}
