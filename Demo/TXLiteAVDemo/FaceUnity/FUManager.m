@@ -30,7 +30,7 @@ static FUManager *shareManager = NULL;
     dispatch_once(&onceToken, ^{
         shareManager = [[FUManager alloc] init];
     });
-    
+
     return shareManager;
 }
 
@@ -42,15 +42,28 @@ static FUManager *shareManager = NULL;
         
         /**这里新增了一个参数shouldCreateContext，设为YES的话，不用在外部设置context操作，我们会在内部创建并持有一个context。
          还有设置为YES,则需要调用FURenderer.h中的接口，不能再调用funama.h中的接口。*/
-        [[FURenderer shareRenderer] setupWithDataPath:path authPackage:&g_auth_package authSize:sizeof(g_auth_package) shouldCreateContext:NO];
+        [[FURenderer shareRenderer] setupWithDataPath:path authPackage:&g_auth_package authSize:sizeof(g_auth_package) shouldCreateContext:YES];
         
         [self setDefaultParameters];
+        
+        /* 加载AI模型 */
+        [self loadAIModle];
         
         NSLog(@"faceunitySDK version:%@",[FURenderer getVersion]);
     }
     
     return self;
 }
+
+-(void)loadAIModle{
+    /* 单独使用美颜场景，只需加载 ai_facelandmarks75,注：美颜和贴纸都用场景用 ai_face_processor*/
+//    NSData *ai_facelandmarks75 = [NSData dataWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"ai_facelandmarks75.bundle" ofType:nil]];
+//    [FURenderer loadAIModelFromPackage:(void *)ai_facelandmarks75.bytes size:(int)ai_facelandmarks75.length aitype:FUAITYPE_FACELANDMARKS75];
+    
+    NSData *ai_face_processor = [NSData dataWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"ai_face_processor.bundle" ofType:nil]];
+    [FURenderer loadAIModelFromPackage:(void *)ai_face_processor.bytes size:(int)ai_face_processor.length aitype:FUAITYPE_FACEPROCESSOR];
+}
+
 
 /*设置默认参数*/
 - (void)setDefaultParameters {
@@ -67,7 +80,7 @@ static FUManager *shareManager = NULL;
     self.selectedFilterLevel    = 0.5 ;
     
     self.skinDetectEnable       = YES ;
-    self.blurShape              = 0 ;
+    self.blurShape              = 1 ;
     self.blurLevel              = 0.7 ;
     self.whiteLevel             = 0.5 ;
     self.redLevel               = 0.5 ;
@@ -183,15 +196,16 @@ static FUManager *shareManager = NULL;
 }
 
 /**加载美颜道具*/
+/**加载美颜道具*/
 - (void)loadFilter
 {
     NSString *path = [[NSBundle mainBundle] pathForResource:@"face_beautification.bundle" ofType:nil];
 
     items[0] = [FURenderer itemWithContentsOfFile:path];
     
-    NSLog(@"---- load filter ~");
+    /* 点位共存模式*/
+    [FURenderer itemSetParam:items[0] withName:@"landmarks_type" value:@(FUAITYPE_FACEPROCESSOR)];
 }
-
 /**设置美颜参数*/
 - (void)setBeautyParams {
     
@@ -216,12 +230,36 @@ static FUManager *shareManager = NULL;
     [FURenderer itemSetParam:items[0] withName:@"filter_level" value:@(self.selectedFilterLevel)]; //滤镜程度
 }
 
+#pragma mark -  render
+/**将道具绘制到pixelBuffer*/
+- (CVPixelBufferRef)renderItemsToPixelBuffer:(CVPixelBufferRef)pixelBuffer{
+    
+    [self setBeautyParams];
+   
+    CVPixelBufferRef buffer = [[FURenderer shareRenderer] renderPixelBuffer:pixelBuffer withFrameId:frameID items:items itemCount:sizeof(items)/sizeof(int) flipx:YES];//flipx 参数设为YES可以使道具做水平方向的镜像翻转
+    frameID += 1;
+    
+    return buffer;
+}
+
+/**处理YUV*/
+- (void)processFrameWithY:(void*)y U:(void*)u V:(void*)v yStride:(int)ystride uStride:(int)ustride vStride:(int)vstride FrameWidth:(int)width FrameHeight:(int)height {
+    
+    /**设置美颜参数*/
+    [self setBeautyParams];
+    
+    [[FURenderer shareRenderer] renderFrame:y u:u  v:v  ystride:ystride ustride:ustride vstride:vstride width:width height:height frameId:frameID items:items itemCount:sizeof(items)/sizeof(int)];
+    frameID ++ ;
+}
+
 /**将道具绘制到pixelBuffer*/
 
 - (int)renderItemWithTexture:(int)texture Width:(int)width Height:(int)height {
     
     [self setBeautyParams];
     [self prepareToRender];
+    
+    GLint aa =  glGetError();
     
     if(self.flipx){
        fuRenderItemsEx2(FU_FORMAT_RGBA_TEXTURE,&texture, FU_FORMAT_RGBA_TEXTURE, &texture, width, height, frameID, items, sizeof(items)/sizeof(int), NAMA_RENDER_OPTION_FLIP_X | NAMA_RENDER_FEATURE_FULL, NULL);
@@ -258,6 +296,7 @@ static FUManager *shareManager = NULL;
         }
     }
 }
+
 
 /**获取图像中人脸中心点*/
 - (CGPoint)getFaceCenterInFrameSize:(CGSize)frameSize{
