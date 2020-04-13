@@ -4,8 +4,6 @@ FUTXLiteAVDemo 是集成了 Faceunity 面部跟踪和虚拟道具功能 和 [腾
 
 本文是 FaceUnity SDK 快速对接融云 腾讯移动直播 的快速导读说明，关于 `FaceUnity SDK` 的详细说明，请参看 [FULiveDemo](https://github.com/Faceunity/FULiveDemo/tree/dev)
 
-由于腾讯直播sdk过大，运行demo需要下载[TXLiteAVSDK_Professional下载](https://cloud.tencent.com/document/product/454/7873)
-
 **注意：本例是示例 Demo , 只在 首页 --> 直播 --> 美女直播 --> 新建直播间 --> 开始直播 内 接入了 FaceUnity 效果，如需更多接入，请用户参照本例自行定义。** 
 
 ## 主要文件说明
