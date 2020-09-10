@@ -29,7 +29,7 @@
 //#define CUSTOM_AUDIO_RECORD
 
 #ifdef CUSTOM_AUDIO_RECORD
-#import "TXCAudioCustomRecorder.h"
+#import "CustomAudioCapturor.h"
 #endif
 
 // 清晰度定义
@@ -119,7 +119,7 @@ TXVideoCustomProcessDelegate,
 BeautySettingPanelDelegate,
 BeautyLoadPituDelegate,
 ScanQRDelegate,
-TXCAudioCustomRecorderDelegate,
+CustomAudioCapturorDelegate,
 AddressBarControllerDelegate
 >
 #endif
@@ -312,7 +312,7 @@ AddressBarControllerDelegate
         _config.customModeType |= CUSTOM_MODE_AUDIO_CAPTURE;
         _config.audioSampleRate = AUDIO_SAMPLE_RATE_48000;
         _config.audioChannels   = channels;
-        [TXCAudioCustomRecorder sharedInstance].delegate = self;
+        [CustomAudioCapturor sharedInstance].delegate = self;
 #endif
 //        [[[NSThread alloc] initWithTarget:self
 //                                 selector:@selector(customAudioCaptureThread)
@@ -348,7 +348,7 @@ AddressBarControllerDelegate
             return NO;
         }
 #ifdef CUSTOM_AUDIO_RECORD
-        [[TXCAudioCustomRecorder sharedInstance] startRecord:sampleRate nChannels:channels nSampleLen:(channels*bytes*1024)];
+        [[CustomAudioCapturor sharedInstance] start:sampleRate nChannels:channels nSampleLen:(channels*bytes*1024)];
 #endif
 
 //        [_txLivePublisher setBeautyFilterDepth:6.3 setWhiteningFilterDepth:2.7];
@@ -366,8 +366,8 @@ AddressBarControllerDelegate
     _pushUrl = @"";
     if (_txLivePublisher != nil) {
 #ifdef CUSTOM_AUDIO_RECORD
-        [[TXCAudioCustomRecorder sharedInstance] stopRecord];
-        [TXCAudioCustomRecorder sharedInstance].delegate = nil;
+        [[CustomAudioCapturor sharedInstance] stop];
+        [CustomAudioCapturor sharedInstance].delegate = nil;
 #endif
         _txLivePublisher.delegate = nil;
         [_txLivePublisher stopPreview];
@@ -522,7 +522,7 @@ static vm_size_t get_app_consumed_memory_bytes() {
     _addressBarController = [[AddressBarController alloc] initWithButtonOption:AddressBarButtonOptionNew | AddressBarButtonOptionQRScan];
     _addressBarController.qrPresentView = self.view;
     CGSize size = [[UIScreen mainScreen] bounds].size;
-    int ICON_SIZE = (int) (size.width / 11);
+    int ICON_SIZE = 46;
     CGFloat topOffset = [UIApplication sharedApplication].statusBarFrame.size.height;
     topOffset += self.navigationController.navigationBar.height+5;
     _addressBarController.view.frame = CGRectMake(10, topOffset, self.view.width-20, ICON_SIZE);
@@ -533,7 +533,7 @@ static vm_size_t get_app_consumed_memory_bytes() {
     
 
     float startSpace = 12;
-    float centerInterVal = (size.width - 2 * startSpace - ICON_SIZE) / 8;
+    float centerInterVal = (size.width - 2 * startSpace - ICON_SIZE) / 6;
     float iconY = size.height - ICON_SIZE / 2 - 10;
     if (@available(iOS 11, *)) {
         iconY -= [UIApplication sharedApplication].keyWindow.safeAreaInsets.bottom;
@@ -599,7 +599,7 @@ static vm_size_t get_app_consumed_memory_bytes() {
     [_btnResolution setImage:[UIImage imageNamed:@"set"] forState:UIControlStateNormal];
     [_btnResolution addTarget:self action:@selector(clickHD:) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:_btnResolution];
-
+/*
     //镜像按钮
     _isMirror = NO;
     _btnMirror = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -613,15 +613,16 @@ static vm_size_t get_app_consumed_memory_bytes() {
     [_btnMirror setAlpha:0.5];
     [_btnMirror addTarget:self action:@selector(clickMirror:) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:_btnMirror];
-    
+    */
     //录制按钮
+#ifdef PUSH_RECORD
     _btnRecordVideo = [UIButton buttonWithType:UIButtonTypeCustom];
-    _btnRecordVideo.center = CGPointMake(startSpace + ICON_SIZE / 2 + centerInterVal * 8, iconY);
+    _btnRecordVideo.center = CGPointMake(startSpace + ICON_SIZE / 2 + centerInterVal * 0, iconY - ICON_SIZE);
     _btnRecordVideo.bounds = CGRectMake(0, 0, ICON_SIZE, ICON_SIZE);
     [_btnRecordVideo setImage:[UIImage imageNamed:@"video_press"] forState:UIControlStateNormal];
     [_btnRecordVideo addTarget:self action:@selector(clickRecord) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:_btnRecordVideo];
-    
+#endif
     _labProgress = [[UILabel alloc] init];
     _labProgress.frame = CGRectMake(_btnRecordVideo.left, _btnRecordVideo.top - 30, 50, 30);
     [_labProgress setText:@""];
@@ -772,18 +773,23 @@ static vm_size_t get_app_consumed_memory_bytes() {
 #pragma mark - TXLiveRecordListener
 -(void) onRecordProgress:(NSInteger)milliSecond
 {
-    _labProgress.text = [NSString stringWithFormat:@"%.2f",milliSecond / 1000.0];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        _labProgress.text = [NSString stringWithFormat:@"%.2f",milliSecond / 1000.0];
+
+    });
 }
 
 -(void) onRecordComplete:(TXRecordResult*)result
 {
-    LiveRecordPreviewViewController* vc = [[LiveRecordPreviewViewController alloc] initWithCoverImage:result.coverImage videoPath:result.videoPath renderMode:RENDER_MODE_FILL_EDGE isFromRecord:NO];
-    if (_publish_switch){
-        [self clickPublish:nil];
-    }
-    [self.navigationController presentViewController:vc animated:YES completion:^{
-        //to do
-    }];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        LiveRecordPreviewViewController* vc = [[LiveRecordPreviewViewController alloc] initWithCoverImage:result.coverImage videoPath:result.videoPath renderMode:RENDER_MODE_FILL_EDGE isFromRecord:NO];
+        if (_publish_switch){
+            [self clickPublish:nil];
+        }
+        [self.navigationController presentViewController:vc animated:YES completion:^{
+            //to do
+        }];
+    });
 }
 #endif
 
@@ -1453,7 +1459,7 @@ static vm_size_t get_app_consumed_memory_bytes() {
 {
     //NSLog(@"custom %d, %f, %f", texture, width, height);
 //    return texture;
-    NSlog(@"-------------------- texture ~");
+
     if (_filter == nil) {
         _filter = [[CustomProcessFilter alloc] init];
     }

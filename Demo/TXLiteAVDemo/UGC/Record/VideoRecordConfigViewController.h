@@ -8,8 +8,8 @@
 
 #import <UIKit/UIKit.h>
 #import "TXLiteAVSDKHeader.h"
-#import "VideoRecordConfig.h"
+#import <UGCKit/UGCKit.h>
 
 @interface VideoRecordConfigViewController : UIViewController
-@property (copy, nonatomic) void(^onTapStart)(VideoRecordConfig* configure);
+@property (copy, nonatomic) void(^onTapStart)(UGCKitRecordConfig* config);
 @end

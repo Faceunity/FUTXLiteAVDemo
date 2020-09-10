@@ -27,7 +27,7 @@
     BOOL                     _join_switch;
     BOOL                     _camera_switch;
     BOOL                     _mute_switch;
-    BOOL                     _env_switch;
+    int                      _env_flag;            // 0: 云上正式环境 1: 云上测试环境 2: 自研正式环境 3: 自研测试环境
     
     BOOL                     _appIsInActive;
     BOOL                     _appIsBackground;
@@ -37,6 +37,10 @@
     NSInteger                _log_switch;  // 0:隐藏log  1:显示SDK内部的log  2:显示业务层log
 
 }
+
+// env --  0: 云上正式环境  1: 云上测试环境  2: 自研正式环境  3: 自研测试环境
++ (void)getRoomSig:(int)env sdkAppId:(UInt32)sdkAppId roomId:(UInt32)roomId userId:(NSString *)userId
+        completion:(void(^)(NSString *roomSig))completion;
 
 @end
 

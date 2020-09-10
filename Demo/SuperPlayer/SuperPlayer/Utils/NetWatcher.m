@@ -7,7 +7,8 @@
 //
 
 #import "NetWatcher.h"
-#import <AFNetworking/AFNetworking.h>
+#import "AFNetworking/AFNetworking.h"
+#import "SuperPlayerModelInternal.h"
 
 @interface NetWatcher()
 @property NSArray *definitions;
@@ -129,8 +130,7 @@
 {
     if (AFNetworkReachabilityManager.sharedManager.networkReachabilityStatus == AFNetworkReachabilityStatusReachableViaWWAN) {
         self.adviseDefinition = self.definitions.lastObject;
-        
-        if (![self.playerModel.playingDefinition isEqualToString:self.adviseDefinition]) {
+        if (self.adviseDefinition && ![self.playerModel.playingDefinition isEqualToString:self.adviseDefinition]) {
             self.notifyTipsBlock([@"当前网络为4G，建议切换到" stringByAppendingString:self.adviseDefinition]);
         }
     }

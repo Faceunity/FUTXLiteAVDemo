@@ -64,6 +64,7 @@
         _initReqTime = 0;
         _isShouldRetry = NO;
         _resumeData = nil;
+        _vodCmdRequestCount = 0;
     }
     return self;
 }
@@ -104,6 +105,7 @@
         _recvRespTimeCost = 0;
         _retryCount = 0;
         _reporting = NO;
+        _requestId = @"";
     }
     return self;
 }

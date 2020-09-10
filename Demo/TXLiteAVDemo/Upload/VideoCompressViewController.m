@@ -107,7 +107,7 @@
     _biterateField = [[UITextField alloc] initWithFrame:CGRectMake(biterateLabel.right + 15 * kScaleX, 0, _biterateView.width - biterateLabel.right - 30 * kScaleX, _biterateView.height)];
     _biterateField.delegate = self;
     _biterateField.placeholder = @"600 ~ 4800";
-    [_biterateField setValue:[UIColor grayColor] forKeyPath:@"_placeholderLabel.textColor"];
+    [_biterateField setValue:[UIColor grayColor] forKeyPath:@"placeholderLabel.textColor"];
     _biterateField.textColor = [UIColor whiteColor];
     _biterateField.textAlignment = NSTextAlignmentRight;
     _biterateField.returnKeyType = UIReturnKeyDone;
@@ -183,12 +183,20 @@
     _generating = NO;
     [_videoEditor cancelGenerate];
     if(_timer) dispatch_cancel(_timer);
+    if(_exportSession) {
+        [_exportSession cancelExport];
+        _exportSession = nil;
+    }
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    self.navigationController.navigationBar.hidden = NO;
 }
 
 -(void)goBack{
-    [self dismissViewControllerAnimated:YES completion:^{
-        //to do
-    }];
+    [self.navigationController popViewControllerAnimated:YES];
 }
 
 -(void)confirm{
@@ -223,7 +231,7 @@
                     vc.videoPath = _videoOutputPath;
                     [self.navigationController pushViewController:vc animated:YES];
                 });
-            }else{
+            }else if(_exportSession.status == AVAssetExportSessionStatusFailed){
                 dispatch_async(dispatch_get_main_queue(), ^(void) {
                     //系统函数导出失败，通过videoEditor导出
                     _generateProgressView.progress = 0;

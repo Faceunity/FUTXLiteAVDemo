@@ -59,6 +59,7 @@ static TVCReport *_shareInstance = nil;
     copy.vodSessionKey = info.vodSessionKey;
     copy.retryCount = info.retryCount;
     copy.reporting = info.reporting;
+    copy.requestId = info.requestId;
     copy.useHttpDNS = info.useHttpDNS;
     copy.cosRegion = info.cosRegion;
     copy.useCosAcc = info.useCosAcc;
@@ -118,6 +119,7 @@ static TVCReport *_shareInstance = nil;
     [dictParam setValue:info.vodSessionKey forKey:@"vodSessionKey"];
     [dictParam setValue:info.fileId forKey:@"fileId"];
     
+    [dictParam setValue:info.requestId forKey:@"requestId"];
     [dictParam setValue:[NSNumber numberWithInt:info.useHttpDNS] forKey:@"useHttpDNS"];
     [dictParam setValue:info.cosRegion forKey:@"cosRegion"];
     [dictParam setValue:[NSNumber numberWithInt:info.useCosAcc] forKey:@"useCosAcc"];

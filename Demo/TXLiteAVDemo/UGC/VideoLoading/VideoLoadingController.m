@@ -15,6 +15,7 @@
 
 #ifdef SDK_BUILD_NUMBER
 #import "VideoCompressViewController.h"
+#import "ImageUploadViewController.h"
 #endif
 
 #import "TXLiteAVSDKHeader.h"
@@ -142,11 +143,19 @@
 #endif
                 
 #ifdef SDK_BUILD_NUMBER
-            case ComposeMode_Upload:
+            case ComposeMode_Video_Upload:
             {
                 VideoCompressViewController *vc = [VideoCompressViewController new];
                 //            vc.videoList = _localPaths;
                 vc.videoAsset = _videosToEditAssets[0];
+                if(!_loadingIsInterrupt) [self.navigationController pushViewController:vc animated:YES];
+            }
+                return;
+            case ComposeMode_Image_Upload:
+            {
+                ImageUploadViewController *vc = [ImageUploadViewController new];
+                //            vc.videoList = _localPaths;
+                vc.images = _imagesToEdit;
                 if(!_loadingIsInterrupt) [self.navigationController pushViewController:vc animated:YES];
             }
                 return;

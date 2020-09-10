@@ -7,12 +7,10 @@
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <Masonry/Masonry.h>
+#import "CFDanmakuView.h"
 #import "SuperPlayer.h"
 #import "ScanQRController.h"
-#import "UIImage+Additions.h"
 #import "ListVideoCell.h"
-#import "TXPlayerAuthParams.h"
-#import "TXVodPlayer.h"
 #import "TCHttpUtil.h"
 #import "MBProgressHUD.h"
 #import "TXMoviePlayerNetApi.h"
@@ -22,6 +20,9 @@
 #import "SuperPlayerGuideView.h"
 #import "AFNetworking.h"
 #import "UIImageView+WebCache.h"
+#import "TXLiteAVSDK.h"
+#import "UGCUploadList.h"
+
 #define LIST_VIDEO_CELL_ID @"LIST_VIDEO_CELL_ID"
 #define LIST_LIVE_CELL_ID @"LIST_LIVE_CELL_ID"
 
@@ -29,15 +30,13 @@ __weak UITextField *appField;
 __weak UITextField *fileidField;
 __weak UITextField *urlField;
 
-@interface MoviePlayerViewController () <SuperPlayerDelegate, ScanQRDelegate, UITableViewDelegate, UITableViewDataSource,TXMoviePlayerNetDelegate>
+@interface MoviePlayerViewController () <SuperPlayerDelegate, ScanQRDelegate, UITableViewDelegate, UITableViewDataSource, CFDanmakuDelegate>
 /** 播放器View的父视图*/
 @property (nonatomic) UIView *playerFatherView;
 @property (strong, nonatomic) SuperPlayerView *playerView;
 /** 离开页面时候是否在播放 */
-@property (nonatomic, assign) BOOL isPlaying;
-/** 是否播放默认宣传视频 */
-@property (nonatomic, assign) BOOL isPlayDefaultVideo;
-
+@property (nonatomic, assign) BOOL isPlaying;   
+@property (nonatomic, strong) UGCUploadList *ugcUplaodList; ///< UGC 上传业务
 @property (nonatomic, strong) UIView *bottomView;
 @property (weak, nonatomic) IBOutlet UIButton *backBtn;
 @property (nonatomic, strong) UITextField *textView;
@@ -59,6 +58,11 @@ __weak UITextField *urlField;
 
 @property UIScrollView  *scrollView;    //视频列表滑动scrollview
 
+@property UIButton *playerBackBtn;
+@property (nonatomic, strong) AFHTTPSessionManager *manager;
+
+@property CFDanmakuView *danmakuView;
+
 @end
 
 @implementation MoviePlayerViewController
@@ -66,15 +70,20 @@ __weak UITextField *urlField;
 - (instancetype)init {
     if (SuperPlayerWindowShared.backController) {
         [SuperPlayerWindowShared hide];
-        return (MoviePlayerViewController *)SuperPlayerWindowShared.backController;
+        MoviePlayerViewController *playerViewCtrl = (MoviePlayerViewController *)SuperPlayerWindowShared.backController;
+        playerViewCtrl.danmakuView.clipsToBounds = NO;
+        return playerViewCtrl;
     } else {
-        return [super init];
+        if (self = [super init]) {
+            _manager = [AFHTTPSessionManager manager];
+        }
+        return self;
     }
 }
 
 - (void)dealloc {
     NSLog(@"%@释放了",self.class);
-    SuperPlayerWindowShared.superPlayer = nil;
+    [_manager invalidateSessionCancelingTasks:YES];
 }
 
 - (void)willMoveToParentViewController:(nullable UIViewController *)parent
@@ -113,9 +122,9 @@ __weak UITextField *urlField;
     [button setBackgroundImage:[UIImage imageNamed:@"扫码"] forState:UIControlStateNormal];
     [button addTarget:self action:@selector(clickScan:) forControlEvents:UIControlEventTouchUpInside];
     [button sizeToFit];
-    button.hidden = !_isPlayDefaultVideo;
+    button.hidden = self.videoURL != nil;
     UIBarButtonItem *rightItem = [[UIBarButtonItem alloc] initWithCustomView:button];
-    self.navigationItem.rightBarButtonItems = @[rightItem,rightItemh];
+    self.navigationItem.rightBarButtonItems = @[rightItem, rightItemh];
 
 
 
@@ -147,10 +156,11 @@ __weak UITextField *urlField;
         }];
         _playerView.isLockScreen = YES;
         __weak SuperPlayerView *wplayer = _playerView;
+        __weak __typeof(self) wself = self;
         _guideView.missHandler = ^{
             wplayer.isLockScreen = NO;
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [self showControlView:NO];
+                [wself showControlView:NO];
                 
                 [df setBool:YES forKey:@"isShowGuide"];
                 [df synchronize];
@@ -166,8 +176,8 @@ __weak UITextField *urlField;
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    
-    if (!_isPlayDefaultVideo) {
+
+    if (self.videoURL) {
         [self clickVodList:nil];
     }
 }
@@ -183,19 +193,7 @@ __weak UITextField *urlField;
     _vodDataSourceArray = [NSMutableArray new];
     _liveDataSourceArray = [NSMutableArray new];
     
-    if (!self.videoURL) {
-//        self.videoURL = @"http://1252463788.vod2.myqcloud.com/95576ef5vodtransgzp1252463788/bfc18e335285890780806831790/v.f20.mp4";
-        _isPlayDefaultVideo = YES;
-//
-//        SuperPlayerModel *playerModel                  = [[SuperPlayerModel alloc] init];
-//        playerModel.title            = @"小直播宣传视频";
-//        playerModel.videoURL         = self.videoURL;
-////        playerModel.videoURL = @"http://5815.liveplay.myqcloud.com/live/5815_62fe94d692ab11e791eae435c87f075e.flv";
-//
-//        [self.playerView playWithModel:playerModel];
-    }else{
-        _isPlayDefaultVideo = NO;
-        
+    if (self.videoURL) {
         SuperPlayerModel *playerModel = [[SuperPlayerModel alloc] init];
         playerModel.videoURL         = self.videoURL;
         [self.playerView playWithModel:playerModel];
@@ -231,14 +229,14 @@ __weak UITextField *urlField;
     [self.liveBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
     [self.liveBtn setTitleColor:[UIColor lightTextColor] forState:UIControlStateNormal];
     [self.liveBtn addTarget:self action:@selector(clickLiveList:) forControlEvents:UIControlEventTouchUpInside];
-    [self.liveBtn setSelected:YES];
+    [self.vodBtn setSelected:YES];
     
     CGFloat btnWidth = self.vodBtn.titleLabel.attributedText.size.width;
-    [self.liveBtn mas_makeConstraints:^(MASConstraintMaker *make) {
+    [self.vodBtn mas_makeConstraints:^(MASConstraintMaker *make) {
         make.top.mas_equalTo(self.playerFatherView.mas_bottom).offset(10);
         make.centerX.mas_equalTo(self.view.mas_centerX).mas_offset(-btnWidth);
     }];
-    [self.vodBtn mas_makeConstraints:^(MASConstraintMaker *make) {
+    [self.liveBtn mas_makeConstraints:^(MASConstraintMaker *make) {
         make.top.mas_equalTo(self.playerFatherView.mas_bottom).offset(10);
         make.centerX.mas_equalTo(self.view.mas_centerX).mas_offset(btnWidth);
     }];
@@ -275,7 +273,7 @@ __weak UITextField *urlField;
     [container addSubview:self.liveListView];
     [self.liveListView mas_makeConstraints:^(MASConstraintMaker *make) {
         make.top.mas_equalTo(0);
-        make.left.mas_equalTo(0);
+        make.left.mas_equalTo(@(ScreenWidth));
         make.width.equalTo(@(ScreenWidth));
         make.bottom.mas_equalTo(container.mas_bottom);
     }];
@@ -290,7 +288,7 @@ __weak UITextField *urlField;
     [container addSubview:self.vodListView];
     [self.vodListView mas_makeConstraints:^(MASConstraintMaker *make) {
         make.top.mas_equalTo(0);
-        make.left.mas_equalTo(@(ScreenWidth));
+        make.left.mas_equalTo(0);
         make.width.equalTo(@(ScreenWidth));
         make.bottom.mas_equalTo(container.mas_bottom);
     }];
@@ -303,71 +301,83 @@ __weak UITextField *urlField;
     // 定义一个button
     UIButton *addButton = [UIButton buttonWithType:UIButtonTypeCustom];
     [addButton setImage:[UIImage imageNamed:@"addp"] forState:UIControlStateNormal];
-    addButton.hidden = !_isPlayDefaultVideo;
     [self.view addSubview:addButton];
     [addButton sizeToFit];
     [addButton addTarget:self action:@selector(onAddClick:) forControlEvents:UIControlEventTouchUpInside];
     self.addBtn = addButton;
     
+    [self _refreshVODList];
 
-    if (_isPlayDefaultVideo) {
+    [self _refreshLiveList];
+    
+
+    self.playerBackBtn = ((SPDefaultControlView *)self.playerView.controlView).backBtn;
+    // 直接获取controlview，想怎样控制界面都行。记得在全屏事件里也要处理，不然内部可能会设其它状态
+    //    self.playerBackBtn.hidden = YES;
+}
+
+- (void)_refreshVODList {
+    if (nil == self.videoURL) {
         TXPlayerAuthParams *p = [TXPlayerAuthParams new];
         p.appId = 1252463788;
         p.fileId = @"5285890781763144364";
         [_authParamArray addObject:p];
-        
+
         p = [TXPlayerAuthParams new];
         p.appId = 1252463788;
         p.fileId = @"4564972819220421305";
         [_authParamArray addObject:p];
-        
+
         p = [TXPlayerAuthParams new];
         p.appId = 1252463788;
         p.fileId = @"4564972819219071568";
         [_authParamArray addObject:p];
-        
+
         p = [TXPlayerAuthParams new];
         p.appId = 1252463788;
         p.fileId = @"4564972819219071668";
         [_authParamArray addObject:p];
-        
+
         p = [TXPlayerAuthParams new];
         p.appId = 1252463788;
         p.fileId = @"4564972819219071679";
         [_authParamArray addObject:p];
-        
-        
+
         [self getNextInfo];
-    }else{
-        [TCHttpUtil asyncSendHttpRequest:@"api/v1/resource/videos" httpServerAddr:kHttpUGCServerAddr HTTPMethod:@"GET" param:nil handler:^(int result, NSDictionary *resultDict) {
-            if (result == 0){
-                NSDictionary *dataDict = resultDict[@"data"];
-                if (dataDict) {
-                    NSArray *list = dataDict[@"list"];
-                    for(NSDictionary *dic in list){
-                        TXPlayerAuthParams *p = [TXPlayerAuthParams new];
-                        p.appId = [UGCAppid intValue];
-                        p.fileId = dic[@"fileId"];
-                        [_authParamArray addObject:p];
-                    }
-                    [self getNextInfo];
-                }else{
-                    UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:@"获取视频列表失败"
-                                                                        message:[NSString stringWithFormat:@"错误码：%@ 错误信息：%@",resultDict[@"code"], resultDict[@"message"]]
-                                                                       delegate:self
-                                                              cancelButtonTitle:@"知道了"
-                                                              otherButtonTitles:nil, nil];
-                    [alertView show];
-                }
+    } else{
+        __weak __typeof(self) wself = self;
+        [self.ugcUplaodList fetchList:^(ListVideoModel * model) {
+            __strong __typeof(wself) self = wself;
+            [self.vodDataSourceArray addObject:model];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [wself.vodListView reloadData];
+            });
+
+            if (self.vodDataSourceArray.count == 1 && nil == self.videoURL) {
+                [self.playerView.controlView setTitle:[self.vodDataSourceArray[0] title]];
+                [self.playerView playWithModel:[self.vodDataSourceArray[0] getPlayerModel]];
+                [self showControlView:YES];
+            }
+        } completion:^(int code, NSString * _Nonnull message) {
+            if (code != 0) {
+                UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:@"获取视频列表失败"
+                                                                    message:message
+                                                                   delegate:nil
+                                                          cancelButtonTitle:@"知道了"
+                                                          otherButtonTitles:nil];
+                [alertView show];
             }
         }];
     }
-    
-    SuperPlayerGlobleConfigShared.playShiftDomain = @"vcloudtimeshift.qcloud.com";
-    
-    AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
+}
+
+
+- (void)_refreshLiveList {
+    // Refresh Video list
+    AFHTTPSessionManager *manager = self.manager;
+    __weak __typeof(self) weakSelf = self;
     [manager GET:@"http://xzb.qcloud.com/get_live_list" parameters:nil progress:nil success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
-        [manager invalidateSessionCancelingTasks:YES];
+        __strong __typeof(weakSelf) self = weakSelf;
         if ([J2Num([responseObject valueForKeyPath:@"code"]) intValue] != 200) {
             [self hudMessage:@"直播列表请求失败"];
             return;
@@ -384,35 +394,19 @@ __weak UITextField *urlField;
             for (id url in playUrl) {
                 [m addHdUrl:J2Str([url valueForKeyPath:@"url"]) withTitle:J2Str([url valueForKeyPath:@"title"])];
             }
-            
+
             [allList addObject:m];
         }
-        _liveDataSourceArray = allList;
-        [_liveListView reloadData];
-        
-        if (allList.count > 0 && _isPlayDefaultVideo) {
-            [self.playerView.controlView setTitle:[_liveDataSourceArray[0] title]];
-            [self.playerView playWithModel:[_liveDataSourceArray[0] getPlayerModel]];
-            if (self.guideView) {
-                [self showControlView:YES];
-            }
-        }
-        
-
-        
+        self.liveDataSourceArray = allList;
+        [self.liveListView reloadData];
     } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
-        [manager invalidateSessionCancelingTasks:YES];
+
     }];
-    
-    
-    if (!_isPlayDefaultVideo) {
-        [self clickVodList:nil];
-    }
 }
 
 // 返回值要必须为NO
 - (BOOL)shouldAutorotate {
-    return NO;
+    return YES;
 }
 
 - (UIStatusBarStyle)preferredStatusBarStyle {
@@ -429,12 +423,18 @@ __weak UITextField *urlField;
 
 #pragma mark - SuperPlayerDelegate
 
-- (void)superPlayerBackAction:(id)sender {
+- (void)superPlayerBackAction:(SuperPlayerView *)player {
     [self backClick];
 }
 
 
 #pragma mark - Getter
+- (UGCUploadList *)ugcUplaodList {
+    if (!_ugcUplaodList) {
+        _ugcUplaodList = [[UGCUploadList alloc] init];
+    }
+    return _ugcUplaodList;
+}
 
 - (SuperPlayerView *)playerView {
     if (!_playerView) {
@@ -442,25 +442,32 @@ __weak UITextField *urlField;
         _playerView.fatherView = _playerFatherView;
         // 设置代理
         _playerView.delegate = self;
-        
+        // demo的时移域名，请根据您项目实际情况修改这里
+        _playerView.playerConfig.playShiftDomain = @"vcloudtimeshift.qcloud.com";
         [self setupDanmakuData];
     }
     return _playerView;
 }
 
-- (void)onNetSuccess:(TXMoviePlayerNetApi *)obj
+- (void)onNetSuccess:(TXMoviePlayInfoResponse *)playInfo
 {
     ListVideoModel *m = [[ListVideoModel alloc] init];
-    m.appId = obj.playInfo.appId;
-    m.fileId = obj.playInfo.fileId;
-    m.duration = obj.playInfo.duration;
-    m.title = obj.playInfo.videoDescription?:obj.playInfo.name;
-    m.coverUrl = obj.playInfo.coverUrl;
+    m.appId = playInfo.appId;
+    m.fileId = playInfo.fileId;
+    m.duration = playInfo.duration;
+    m.title = playInfo.videoDescription?:playInfo.name;
+    m.coverUrl = playInfo.coverUrl;
     [_vodDataSourceArray addObject:m];
     dispatch_async(dispatch_get_main_queue(), ^{
-        [_vodListView reloadData];
+        [self.vodListView reloadData];
         [self getNextInfo];
     });
+    
+    if (_vodDataSourceArray.count == 1) {
+        [self.playerView.controlView setTitle:[self.vodDataSourceArray[0] title]];
+        [self.playerView playWithModel:[self.vodDataSourceArray[0] getPlayerModel]];
+        [self showControlView:YES];
+    }
 }
 
 - (void)hudMessage:(NSString *)msg {
@@ -485,15 +492,20 @@ __weak UITextField *urlField;
     
     if (self.getInfoNetApi == nil) {
         self.getInfoNetApi = [[TXMoviePlayerNetApi alloc] init];
-        self.getInfoNetApi.delegate = self;
+//        self.getInfoNetApi.delegate = self;
         self.getInfoNetApi.https = NO;
     }
+    __weak __typeof(self) wself = self;
     [self.getInfoNetApi getplayinfo:p.appId
                              fileId:p.fileId
-                             timeout:p.timeout
-                                  us:p.us
-                               exper:p.exper
-                                sign:p.sign];
+                              psign:p.sign
+                         completion:^(TXMoviePlayInfoResponse *resp, NSError *error) {
+        if (error) {
+            [wself hudMessage:@"fileid请求失败"];
+        } else {
+            [wself onNetSuccess:resp];
+        }
+    }];
 }
 
 #pragma mark - Action
@@ -504,7 +516,9 @@ __weak UITextField *urlField;
     // 状态条的方向旋转的方向,来判断当前屏幕的方向
     UIInterfaceOrientation orientation = [UIApplication sharedApplication].statusBarOrientation;
     // 是竖屏时候响应关
-    if (orientation == UIInterfaceOrientationPortrait && (self.playerView.state == StatePlaying) && _isPlayDefaultVideo) {
+    if (orientation == UIInterfaceOrientationPortrait &&
+        (self.playerView.state == StatePlaying)) {
+        self.danmakuView.clipsToBounds = YES;
         [SuperPlayerWindowShared setSuperPlayer:self.playerView];
         [SuperPlayerWindowShared show];
         SuperPlayerWindowShared.backController = self;
@@ -515,6 +529,16 @@ __weak UITextField *urlField;
     [self.navigationController popViewControllerAnimated:YES];
 }
 
+- (void)clickStyle:(UIButton *)btn
+{
+    if ([self.playerView.controlView isKindOfClass:[SPDefaultControlView class]]) {
+        self.playerView.controlView = [[SPWeiboControlView alloc] init];
+        [self hudMessage:@"已切换微博风格"];
+    } else if ([self.playerView.controlView isKindOfClass:[SPWeiboControlView class]]) {
+        self.playerView.controlView = [[SPDefaultControlView alloc] init];
+        [self hudMessage:@"已切换默认风格"];
+    }
+}
 
 -(void) clickScan:(UIButton*) btn
 {
@@ -523,30 +547,96 @@ __weak UITextField *urlField;
     ScanQRController* vc = [[ScanQRController alloc] init];
     vc.delegate = self;
     [self.navigationController pushViewController:vc animated:NO];
+    self.playerView.isLockScreen = YES;
+}
+
+- (int)_getIntFromDict:(NSDictionary *)dictionary key:(NSString *)key {
+    NSString *value = dictionary[key];
+    if (value) {
+        return [value intValue];
+    }
+    return -1;
+}
+
+- (BOOL)_fillModel:(SuperPlayerModel *)model withURL:(NSString *)result {
+    NSURLComponents *components = [NSURLComponents componentsWithString:result];
+    if ([components.host isEqualToString:@"playvideo.qcloud.com"]) {
+        NSArray *pathComponents = [components.path componentsSeparatedByString:@"/"];
+        if (pathComponents.count != 5) {
+            return NO;
+        }
+        NSString *appID = pathComponents[3];
+        NSString *fileID =  pathComponents[4];
+
+        NSMutableDictionary *paramDict = [NSMutableDictionary dictionaryWithCapacity:components.queryItems.count];
+        for (NSURLQueryItem *item in components.queryItems) {
+            if (item.value) {
+                paramDict[item.name] = item.value;
+            }
+        }
+        model.appId = [appID integerValue];
+        model.videoId = [[SuperPlayerVideoId alloc] init];
+        model.videoId.fileId = fileID;
+        if (paramDict[@"pcfg"]) {
+            [model.videoId setValue:paramDict[@"pcfg"] forKey:@"pcfg"];
+        }
+        model.videoId.psign = paramDict[@"psign"];
+        return YES;
+    } else if ([components.host isEqualToString:@"play_vod"]) {
+        NSMutableDictionary *paramDict = [NSMutableDictionary dictionaryWithCapacity:components.queryItems.count];
+        for (NSURLQueryItem *item in components.queryItems) {
+            if (item.value) {
+                paramDict[item.name] = item.value;
+            }
+        }
+        model.appId = [paramDict[@"appId"] integerValue];
+        model.videoId = [[SuperPlayerVideoId alloc] init];
+        model.videoId.fileId = paramDict[@"fileId"];
+        if (paramDict[@"pcfg"]) {
+            [model.videoId setValue:paramDict[@"pcfg"] forKey:@"pcfg"];
+        }        model.videoId.psign = paramDict[@"psign"];
+        return YES;
+    }
+    return NO;
 }
 
 - (void)onScanResult:(NSString *)result
 {
     self.textView.text = result;
     SuperPlayerModel *model = [SuperPlayerModel new];
-    model.videoURL         = result;
-    
-    [self.playerView.controlView setTitle: @"这是新播放的视频"];
+    BOOL isLive = self.playerView.isLive;
+    if ([result hasPrefix:@"txsuperplayer://"]) {
+        [self _fillModel:model withURL:result];
+        isLive = NO;
+    } else if ([result hasPrefix:@"https://playvideo.qcloud.com/getplayinfo/v4"]) {
+        if ([self _fillModel:model withURL:result]) {
+            isLive = NO;
+        } else {
+            model.videoURL = result;
+        }
+    } else {
+        model.videoURL = result;
+    }
+    [self.playerView.controlView setTitle:@"这是新播放的视频"];
+    [self.playerView.coverImageView setImage:nil];
     [self.playerView playWithModel:model];
     
     ListVideoModel *m = [ListVideoModel new];
     m.url = result;
     m.type = self.playerView.isLive;
-    if (self.playerView.isLive) {
-        m.title = [NSString stringWithFormat:@"视频%lu",_liveDataSourceArray.count+1];
+    if (isLive) {
+        m.title = [NSString stringWithFormat:@"视频%lu",(unsigned long)_liveDataSourceArray.count+1];
         [_liveDataSourceArray addObject:m];
         [_liveListView reloadData];
     } else {
-        m.title = [NSString stringWithFormat:@"视频%lu",_vodDataSourceArray.count+1];
+        if (model.videoId) {
+            [m setModel:model];
+        }
+        m.title = [NSString stringWithFormat:@"视频%lu",(unsigned long)_vodDataSourceArray.count+1];
         [_vodDataSourceArray addObject:m];
         [_vodListView reloadData];
     }
-    
+    self.playerView.isLockScreen = NO;
 }
 
 - (void)onAddClick:(UIButton *)btn
@@ -577,7 +667,7 @@ __weak UITextField *urlField;
             TXPlayerAuthParams *p = [TXPlayerAuthParams new];
             p.appId = [appField.text intValue];
             p.fileId = fileidField.text;
-            [_authParamArray addObject:p];
+            [self.authParamArray addObject:p];
             
             [self getNextInfo];
         } else {
@@ -588,16 +678,18 @@ __weak UITextField *urlField;
             
             ListVideoModel *m = [ListVideoModel new];
             m.url = urlField.text;
-            m.title = [NSString stringWithFormat:@"视频%lu",_liveDataSourceArray.count+1];
+            m.title = [NSString stringWithFormat:@"视频%lu",(unsigned  long)self.liveDataSourceArray.count+1];
             m.type = 1;
-            [_liveDataSourceArray addObject:m];
-            [_liveListView reloadData];
+            [self.liveDataSourceArray addObject:m];
+            [self.liveListView reloadData];
         }
         
         self.playerView.isLockScreen = isLock;
     }]];
      
-    [control addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
+    [control addAction:[UIAlertAction actionWithTitle:@"取消"
+                                                style:UIAlertActionStyleCancel
+                                              handler:^(UIAlertAction * _Nonnull action) {
         self.playerView.isLockScreen = isLock;
     }]];
     
@@ -638,8 +730,9 @@ __weak UITextField *urlField;
 {
     ListVideoCell *cell = [tableView cellForRowAtIndexPath:indexPath];
     if (cell) {
-        [self.playerView.controlView setTitle:[cell dataSource].title];
-        [self.playerView.coverImageView sd_setImageWithURL:[NSURL URLWithString:[cell dataSource].coverUrl]];
+        [self.playerView.controlView setTitle:[cell getSource].title];
+        
+        [self.playerView.coverImageView sd_setImageWithURL:[NSURL URLWithString:[cell getSource].coverUrl]];
         [self.playerView playWithModel:[cell getPlayerModel]];
     }
 }
@@ -664,12 +757,14 @@ __weak UITextField *urlField;
         
         NSString* emotionName = [NSString stringWithFormat:@"smile_%u", arc4random_uniform(90)];
         UIImage* emotion = [UIImage imageNamed:emotionName];
-        NSTextAttachment* attachment = [[NSTextAttachment alloc] init];
-        attachment.image = emotion;
-        attachment.bounds = CGRectMake(0, -font.lineHeight*0.3, font.lineHeight*1.5, font.lineHeight*1.5);
-        NSAttributedString* emotionAttr = [NSAttributedString attributedStringWithAttachment:attachment];
+        if (nil != emotion) {
+            NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
+            attachment.image = emotion;
+            attachment.bounds = CGRectMake(0, -font.lineHeight*0.3, font.lineHeight*1.5, font.lineHeight*1.5);
+            NSAttributedString *emotionAttr = [NSAttributedString attributedStringWithAttachment:attachment];
+            [contentStr appendAttributedString:emotionAttr];
+        }
         
-        [contentStr appendAttributedString:emotionAttr];
         danmaku.contentStr = contentStr;
         
         NSString* attributesStr = dict[@"p"];
@@ -682,7 +777,7 @@ __weak UITextField *urlField;
         //        }
     }
     
-    CFDanmakuView *_danmakuView = [[CFDanmakuView alloc] initWithFrame:CGRectZero];
+    _danmakuView = [[CFDanmakuView alloc] initWithFrame:CGRectZero];
     _danmakuView.duration = 6.5;
     _danmakuView.centerDuration = 2.5;
     _danmakuView.lineHeight = 25;
@@ -690,7 +785,18 @@ __weak UITextField *urlField;
     _danmakuView.maxCenterLineCount = 5;
     [_danmakuView prepareDanmakus:danmakus];
     
-    self.playerView.danmakuView = _danmakuView;
+    _danmakuView.delegate = self;
+    [self.playerView addSubview:_danmakuView];
+    
+    [_danmakuView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.top.equalTo(self.playerView);
+        make.bottom.equalTo(self.playerView);
+        make.left.equalTo(self.playerView);
+        make.right.equalTo(self.playerView);
+    }];
+    
+    SPDefaultControlView *dv = (SPDefaultControlView *)self.playerView.controlView;
+    [dv.danmakuBtn addTarget:self action:@selector(danmakuShow:) forControlEvents:UIControlEventTouchUpInside];
 }
 
 - (void)showControlView:(BOOL)isShow {
@@ -700,6 +806,7 @@ __weak UITextField *urlField;
         self.playerView.controlView.hidden = YES;
     }
 }
+
 #pragma mark - ScrollView Delegate
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView;
@@ -707,11 +814,11 @@ __weak UITextField *urlField;
     if (scrollView == self.scrollView) {
     CGPoint p = [scrollView contentOffset];
         if (p.x >= ScreenWidth) {
-            [self.vodBtn setSelected:YES];
-            [self.liveBtn setSelected:NO];
-        } else {
-            [self.vodBtn setSelected:NO];
             [self.liveBtn setSelected:YES];
+            [self.vodBtn setSelected:NO];
+        } else {
+            [self.liveBtn setSelected:NO];
+            [self.vodBtn setSelected:YES];
         }
     }
 }
@@ -719,13 +826,59 @@ __weak UITextField *urlField;
 - (void)clickVodList:(id)sender {
     [self.vodBtn setSelected:YES];
     [self.liveBtn setSelected:NO];
-    [self.scrollView scrollRectToVisible:CGRectMake(ScreenWidth, 0, ScreenWidth, self.scrollView.mm_h) animated:YES];
+    [self.scrollView scrollRectToVisible:CGRectMake(0, 0, ScreenWidth, self.scrollView.mm_h) animated:YES];
 }
 
 - (void)clickLiveList:(id)sender {
     [self.vodBtn setSelected:NO];
     [self.liveBtn setSelected:YES];
-    [self.scrollView scrollRectToVisible:CGRectMake(0, 0, ScreenWidth, self.scrollView.mm_h) animated:YES];
+    [self.scrollView scrollRectToVisible:CGRectMake(ScreenWidth, 0, ScreenWidth, self.scrollView.mm_h) animated:YES];
+}
+
+- (void)superPlayerFullScreenChanged:(SuperPlayerView *)player {
+//    self.playerBackBtn.hidden = !player.isFullScreen;
+//    if (player.isFullScreen) {
+//        SPDefaultControlView *controlView = (SPDefaultControlView *)player.controlView;
+//        controlView.danmakuBtn.hidden = YES;
+//    }
+    [[UIApplication sharedApplication] setStatusBarHidden:player.isFullScreen];
+}
+
+- (void)superPlayerDidEnd:(SuperPlayerView *)player
+{
+
+}
+
+- (void)superPlayerDidStart:(SuperPlayerView *)player
+{
+
+}
+#pragma mark - 弹幕
+
+static NSTimeInterval danmaku_start_time; // 测试用的，因为demo里的直播时间可能非常大，本地的测试弹幕时间很短
+
+- (NSTimeInterval)danmakuViewGetPlayTime:(CFDanmakuView *)danmakuView
+{
+    if (_playerView.isLive) {
+        return self.playerView.playCurrentTime - danmaku_start_time;
+    }
+    return self.playerView.playCurrentTime;
+}
+
+- (BOOL)danmakuViewIsBuffering:(CFDanmakuView *)danmakuView
+{
+    return self.playerView.state != StatePlaying;
+}
+
+- (void)danmakuShow:(UIButton *)btn {
+    if (btn.selected) {
+        [_danmakuView start];
+        _danmakuView.hidden = NO;
+        danmaku_start_time = self.playerView.playCurrentTime;
+    } else {
+        [_danmakuView pause];
+        _danmakuView.hidden = YES;
+    }
 }
 
 @end

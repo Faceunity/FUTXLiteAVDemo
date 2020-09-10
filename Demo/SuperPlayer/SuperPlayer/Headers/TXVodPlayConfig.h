@@ -44,7 +44,7 @@ typedef NS_ENUM(NSInteger, TX_Enum_PlayerType) {
 
 @property BOOL enableAccurateSeek;          /// 是否精确seek，默认YES. 开启精确后seek，seek的时间平均多出200ms
 
-@property BOOL autoRotate;                  /// 播放mp4文件时，若设为YES则根据文件中的旋转角度自动旋转。旋转角度可在PLAY_EVT_CHANGE_ROTATION事件中获得。默认YES
+@property BOOL autoRotate;                  /// 播放mp4文件时，若设为YES则根据文件中的旋转角度自动旋转。旋转角度可在EVT_VIDEO_CHANGE_ROTATION事件中获得。默认YES
 
 /**
  * 平滑切换码率。默认NO
@@ -57,6 +57,12 @@ typedef NS_ENUM(NSInteger, TX_Enum_PlayerType) {
  *  若不设置，SDK默认间隔0.5秒回调一次
  */
 @property NSTimeInterval progressInterval;
+
+/**
+ * 最大预加载大小，单位 MB
+ *  此设置会影响playableDuration，设置越大，提前缓存的越多
+ */
+@property int maxBufferSize;
 @end
 
 #endif /* TXVodPlayConfig_h */

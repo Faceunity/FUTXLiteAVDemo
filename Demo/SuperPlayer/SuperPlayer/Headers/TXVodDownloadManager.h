@@ -59,6 +59,8 @@ typedef NS_ENUM(NSInteger, TXDownloadError) {
 @property TXVodQuality quality;
 /// 如地址有加密，请填写token
 @property NSString *token;
+/// 清晰度模板。如果后台转码是自定义模板，请在这里填写模板名。templateName和quality同时设置时，以templateName为v准
+@property NSString *templateName;
 @end
 
 /// 下载文件对象
@@ -77,6 +79,8 @@ typedef NS_ENUM(NSInteger, TXDownloadError) {
 @property float progress;
 /// 播放路径，可传给TXVodPlayer播放
 @property NSString *playPath;
+/// 下载速度，byte每秒
+@property int speed;
 @end
 
 /// 下载回调
@@ -95,7 +99,7 @@ typedef NS_ENUM(NSInteger, TXDownloadError) {
  * 下载HLS，遇到加密的文件，将解密key给外部校验
  * @param mediaInfo 下载对象
  * @param url Url地址
- * @prarm data 服务器返回
+ * @param data 服务器返回
  * @return 0 - 校验正确，继续下载；否则校验失败，抛出下载错误（dk获取失败）
  */
 - (int)hlsKeyVerify:(TXVodDownloadMediaInfo *)mediaInfo url:(NSString *)url data:(NSData *)data;
@@ -110,6 +114,11 @@ typedef NS_ENUM(NSInteger, TXDownloadError) {
 @property (weak) id<TXVodDownloadDelegate> delegate;
 
 /**
+ * 设置http头
+ */
+@property NSDictionary *headers;
+
+/**
  * 全局单例接口
  */
 + (TXVodDownloadManager *)shareInstance;
@@ -117,14 +126,14 @@ typedef NS_ENUM(NSInteger, TXDownloadError) {
 /**
  * 设置下载文件的根目录.
  * @param path 目录地址，如不存在，将自动创建
- * @warn 开始下载前必须设置，否者不能下载
+ * @warn 开始下载前必须设置，否则不能下载
  */
 - (void)setDownloadPath:(NSString *)path;
 
 /**
  * 下载文件
  *  @param source 下载源。
- *  @return 成功返回下载对象，否者nil
+ *  @return 成功返回下载对象，否则nil
  *
  *  @waring 目前只支持hls下载
  */
@@ -133,7 +142,7 @@ typedef NS_ENUM(NSInteger, TXDownloadError) {
 /**
  * 下载文件
  *  @param url 下载地址
- *  @return 成功返回下载对象，否者nil
+ *  @return 成功返回下载对象，否则nil
  *
  *  @waring 目前只支持hls下载，不支持master playlist
  */

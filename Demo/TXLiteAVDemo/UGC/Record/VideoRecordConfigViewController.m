@@ -11,17 +11,11 @@
 
 #ifdef ENABLE_UGC
 #import "AppDelegate.h"
-#ifndef UGC_SMART
-#import "VideoEditViewController.h"
-#endif
-#import "VideoRecordViewController.h"
 #import "VideoPreviewViewController.h"
 #endif
 
 @interface VideoRecordConfigViewController ()<UITextFieldDelegate>
-@property (weak, nonatomic) IBOutlet UIButton *btn11;
-@property (weak, nonatomic) IBOutlet UIButton *btn43;
-@property (weak, nonatomic) IBOutlet UIButton *btn169;
+@property (strong, nonatomic) IBOutletCollection(UIButton) NSArray<UIButton*> *ratioButtons;
 @property (weak, nonatomic) IBOutlet UIButton *btnLow;
 @property (weak, nonatomic) IBOutlet UIButton *btnMedium;
 @property (weak, nonatomic) IBOutlet UIButton *btnHigh;
@@ -43,7 +37,7 @@
 
 @implementation VideoRecordConfigViewController
 {
-    VideoRecordConfig *_videoConfig;
+    UGCKitRecordConfig *_videoConfig;
 }
 
 - (void)viewDidLoad {
@@ -51,13 +45,26 @@
     _textFieldKbps.delegate = self;
     _textFieldFps.delegate = self;
     _textFieldDuration.delegate = self;
-    _videoConfig = [[VideoRecordConfig alloc] init];
+    _videoConfig = [[UGCKitRecordConfig alloc] init];
     if ([UIDevice currentDevice].systemVersion.floatValue < 11) {
         self.backButtonTop.constant += 19;
     }
-    [self setBtn:_btn11 selected:NO];
-    [self setBtn:_btn43 selected:NO];
-    [self setBtn:_btn169 selected:YES];
+
+    _videoConfig.ratio = VIDEO_ASPECT_RATIO_9_16;
+    TXVideoAspectRatio ratios[] = {
+        VIDEO_ASPECT_RATIO_1_1, VIDEO_ASPECT_RATIO_3_4,
+        VIDEO_ASPECT_RATIO_4_3, VIDEO_ASPECT_RATIO_9_16,
+        VIDEO_ASPECT_RATIO_16_9};
+    for (NSInteger idx = 0; idx < self.ratioButtons.count; ++idx) {
+        UIButton *btn = self.ratioButtons[idx];
+        btn.tag = ratios[idx];
+        if (btn.tag == _videoConfig.ratio) {
+            [self setBtn:btn selected:YES];
+        } else {
+            [self setBtn:btn selected:NO];
+        }
+    };
+
     [self setBtn:_btnLow selected:NO];
     [self setBtn:_btnMedium selected:YES];
     [self setBtn:_btnHigh selected:NO];
@@ -77,32 +84,6 @@
 #ifdef HelpBtnUI   
     // SDK Demo的帮助按钮
     HelpBtnConfig(self.helpButton, 视频录制)
-    __weak __typeof(self) wself = self;
-    self.onTapStart = ^(VideoRecordConfig *configure) {
-        VideoRecordViewController *vc = [[VideoRecordViewController alloc] initWithConfigure:configure];
-        vc.onRecordCompleted = ^(TXUGCRecordResult *result) {
-#ifdef UGC_SMART
-            const BOOL enableEdit = NO;
-            void (^onEdit)(VideoPreviewViewController *previewVC) = nil;
-#else
-            const BOOL enableEdit = YES;
-            void (^onEdit)(VideoPreviewViewController*) = ^(VideoPreviewViewController *previewVC){
-                VideoEditViewController *vc = [[VideoEditViewController alloc] init];
-                [vc setVideoPath:result.videoPath];
-                [previewVC.navigationController pushViewController:vc animated:YES];
-            };
-#endif
-            VideoPreviewViewController* previewController = [[VideoPreviewViewController alloc]
-                                                             initWithCoverImage:result.coverImage
-                                                             videoPath:result.videoPath
-                                                             renderMode:RENDER_MODE_FILL_EDGE
-                                                             showEditButton:enableEdit];
-            previewController.onTapEdit = onEdit;
-            UINavigationController* nav = [[UINavigationController alloc] initWithRootViewController:previewController];
-            [wself presentViewController:nav animated:YES completion:nil];
-        };
-        [wself.navigationController pushViewController:vc animated:YES];
-    };
 #else
     [self.helpButton removeFromSuperview];
 #endif
@@ -140,25 +121,16 @@
     // Dispose of any resources that can be recreated.
 }
 
-- (IBAction)onClick11:(id)sender {
-    [self setBtn:_btn11 selected:YES];
-    [self setBtn:_btn43 selected:NO];
-    [self setBtn:_btn169 selected:NO];
-    _videoConfig.videoRatio = VIDEO_ASPECT_RATIO_1_1;
-}
-
-- (IBAction)onClick43:(id)sender {
-    [self setBtn:_btn11 selected:NO];
-    [self setBtn:_btn43 selected:YES];
-    [self setBtn:_btn169 selected:NO];
-    _videoConfig.videoRatio = VIDEO_ASPECT_RATIO_3_4;
-}
-
-- (IBAction)onClick169:(id)sender {
-    [self setBtn:_btn11 selected:NO];
-    [self setBtn:_btn43 selected:NO];
-    [self setBtn:_btn169 selected:YES];
-    _videoConfig.videoRatio = VIDEO_ASPECT_RATIO_9_16;
+- (IBAction)onClickRatioButton:(id)sender {
+    for (NSUInteger idx = 0; idx < self.ratioButtons.count; ++idx) {
+        UIButton *btn = self.ratioButtons[idx];
+        if (sender == btn) {
+            [self setBtn:btn selected:YES];
+            _videoConfig.ratio = btn.tag;
+        } else {
+            [self setBtn:btn selected:NO];
+        }
+    }
 }
 
 - (IBAction)onClickLow:(id)sender {
@@ -166,10 +138,10 @@
     [self setBtn:_btnMedium selected:NO];
     [self setBtn:_btnHigh selected:NO];
     [self setBtn:_btnCustom selected:NO];
-    _videoConfig.bps = 2400;
+    _videoConfig.videoBitrate = 2400;
     _videoConfig.fps = 30;
     _videoConfig.gop = 3;
-    _textFieldKbps.text = [@(_videoConfig.bps) stringValue];
+    _textFieldKbps.text = [@(_videoConfig.videoBitrate) stringValue];
     _textFieldFps.text = [@(_videoConfig.fps) stringValue];
     _textFieldDuration.text = [@(_videoConfig.gop) stringValue];
     [self setBtnEnable:NO];
@@ -186,10 +158,10 @@
     [self setView:_viewDuration selected:NO];
     [self setBtnEnable:NO];
     [self onClick540:nil];
-    _videoConfig.bps = 6500;
+    _videoConfig.videoBitrate = 6500;
     _videoConfig.fps = 30;
     _videoConfig.gop = 3;
-    _textFieldKbps.text = [@(_videoConfig.bps) stringValue];
+    _textFieldKbps.text = [@(_videoConfig.videoBitrate) stringValue];
     _textFieldFps.text = [@(_videoConfig.fps) stringValue];
     _textFieldDuration.text = [@(_videoConfig.gop) stringValue];
 }
@@ -204,10 +176,10 @@
     [self setView:_viewDuration selected:NO];
     [self setBtnEnable:NO];
     [self onclick720:nil];
-    _videoConfig.bps = 9600;
+    _videoConfig.videoBitrate = 9600;
     _videoConfig.fps = 30;
     _videoConfig.gop = 3;
-    _textFieldKbps.text = [@(_videoConfig.bps) stringValue];
+    _textFieldKbps.text = [@(_videoConfig.videoBitrate) stringValue];
     _textFieldFps.text = [@(_videoConfig.fps) stringValue];
     _textFieldDuration.text = [@(_videoConfig.gop) stringValue];
 }
@@ -227,7 +199,7 @@
     _textFieldKbps.text = @"600 ~ 12000";
     _textFieldFps.text = @"15 ~ 30";
     _textFieldDuration.text = @"1 ~ 10";
-    _videoConfig.bps = 2400;
+    _videoConfig.videoBitrate = 2400;
     _videoConfig.fps = 20;
     _videoConfig.gop = 3;
 }
@@ -246,24 +218,24 @@
     [self setBtn:_btn360p selected:YES];
     [self setBtn:_btn540p selected:NO];
     [self setBtn:_btn720p selected:NO];
-    _videoConfig.videoResolution = VIDEO_RESOLUTION_360_640;
+    _videoConfig.resolution = VIDEO_RESOLUTION_360_640;
 }
 
 - (IBAction)onClick540:(id)sender {
     [self setBtn:_btn360p selected:NO];
     [self setBtn:_btn540p selected:YES];
-    [self setBtn:_btn720p selected:NO];    _videoConfig.videoResolution = VIDEO_RESOLUTION_540_960;
+    [self setBtn:_btn720p selected:NO];    _videoConfig.resolution = VIDEO_RESOLUTION_540_960;
 }
 
 - (IBAction)onclick720:(id)sender {
     [self setBtn:_btn360p selected:NO];
     [self setBtn:_btn540p selected:NO];
     [self setBtn:_btn720p selected:YES];
-    _videoConfig.videoResolution = VIDEO_RESOLUTION_720_1280;
+    _videoConfig.resolution = VIDEO_RESOLUTION_720_1280;
 }
 
 - (IBAction)onClickAEC:(UISwitch *)sender {
-    _videoConfig.enableAEC = sender.isOn;
+    _videoConfig.AECEnabled = sender.isOn;
     NSString *titie = sender.on ? @"开启回声消除，可以录制人声，BGM，人声+BGM （注意：录制中开启回声消除，BGM的播放模式是手机通话模式，这个模式下系统静音会失效，而视频播放预览走的是媒体播放模式，播放模式的不同会导致录制和预览在相同系统音量下播放声音大小有一定区别）" : @"关闭回声消除，可以录制人声、BGM，耳机模式下可以录制人声 + BGM ，外放模式下不能录制人声+BGM";
     UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"温馨提示" message:titie delegate:sender cancelButtonTitle:@"知道了" otherButtonTitles:nil, nil];
     [alert show];
@@ -271,10 +243,10 @@
 
 - (IBAction)onClick1080P:(UISwitch *)sender {
     if (sender.isOn) {
-        _videoConfig.bps = 9600;
+        _videoConfig.videoBitrate = 9600;
         _videoConfig.fps = 30;
         _videoConfig.gop = 3;
-        _videoConfig.videoResolution = VIDEO_RESOLUTION_1080_1920;
+        _videoConfig.resolution = VIDEO_RESOLUTION_1080_1920;
     }
 }
 
@@ -310,7 +282,7 @@
 
 - (BOOL)textFieldShouldReturn:(UITextField *)textField
 {
-    _videoConfig.bps = [_textFieldKbps.text intValue];
+    _videoConfig.videoBitrate = [_textFieldKbps.text intValue];
     _videoConfig.fps = [_textFieldFps.text intValue];
     _videoConfig.gop = [_textFieldDuration.text intValue];
     [_textFieldKbps resignFirstResponder];
@@ -320,4 +292,4 @@
 }
 
 @end
-　
+

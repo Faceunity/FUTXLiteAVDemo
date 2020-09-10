@@ -7,12 +7,11 @@
 //
 
 #import "VideoEditPrevController.h"
-//#import "TCVideoPublishController.h"
 #import "VideoPreviewViewController.h"
-#import "TXLiteAVSDKHeader.h"
 #import "MBProgressHUD.h"
 #import "TXColor.h"
 #import "UIView+Additions.h"
+#import "VideoPreview.h"
 
 typedef  NS_ENUM(NSInteger,ActionType)
 {
@@ -128,12 +127,6 @@ typedef  NS_ENUM(NSInteger,ActionType)
 {
     [self onVideoPause];
     [self.navigationController popViewControllerAnimated:YES];
-}
-
-- (void)viewWillAppear:(BOOL)animated
-{
-    [super viewWillAppear:animated];
-    self.navigationController.navigationBar.translucent  =  NO; 
 }
 
 - (void)viewDidAppear:(BOOL)animated{

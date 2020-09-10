@@ -17,7 +17,8 @@ typedef NS_ENUM(NSInteger,AssetType){
 typedef NS_ENUM(NSInteger,ComposeMode){
     ComposeMode_Edit,
     ComposeMode_Join,
-    ComposeMode_Upload,
+    ComposeMode_Video_Upload,
+    ComposeMode_Image_Upload,
 };
 
 @interface VideoLoadingController : UIViewController

@@ -9,14 +9,16 @@
 #ifndef SuperPlayerView_Private_h
 #define SuperPlayerView_Private_h
 #import "SuperPlayer.h"
-#import "CFDanmakuView.h"
+
 #import "SuperPlayerControlViewDelegate.h"
 #import "NetWatcher.h"
 #import <MediaPlayer/MediaPlayer.h>
 
 #import "Masonry/Masonry.h"
 #import "AFNetworking/AFNetworking.h"
-#import "SuperPlayerViewConfig.h"
+//#import "SPResolutionDefination.h"
+#import "SPSubStreamInfo.h"
+#import <AVFoundation/AVFoundation.h>
 
 // 枚举值，包含水平移动方向和垂直移动方向
 typedef NS_ENUM(NSInteger, PanDirection){
@@ -26,14 +28,15 @@ typedef NS_ENUM(NSInteger, PanDirection){
 
 typedef NS_ENUM(NSInteger, ButtonAction) {
     ActionNone,
-    ActionReplay,
+    ActionRetry,
     ActionSwitch,
     ActionIgnore,
+    ActionContinueReplay,
 };
 
-
+@class TXVodPlayer, TXLivePlayer;
 @interface SuperPlayerView () <UIGestureRecognizerDelegate,UIAlertViewDelegate,
-TXVodPlayListener, TXLivePlayListener, CFDanmakuDelegate, SuperPlayerControlViewDelegate>
+ SuperPlayerControlViewDelegate, AVAssetResourceLoaderDelegate>
 
 
 /** 用来保存快进的总时长 */
@@ -61,26 +64,20 @@ TXVodPlayListener, TXLivePlayListener, CFDanmakuDelegate, SuperPlayerControlView
 /// 中间的提示按钮
 @property (nonatomic, strong) UIButton               *middleBlackBtn;
 @property ButtonAction                               middleBlackBtnAction;
-/** 重播按钮 */
-@property (nonatomic, strong) UIButton               *repeatBtn;
+
 /** 系统菊花 */
 @property (nonatomic, strong) MMMaterialDesignSpinner *spinner;
 
 @property (nonatomic, strong) UIButton               *lockTipsBtn;
 
 @property (nonatomic, strong) SuperPlayerModel       *playerModel;
-@property SuperPlayerViewConfig                      *playerConfig;
-
 
 @property (class, readonly) UISlider *volumeViewSlider;
+
 @property MPVolumeView *volumeView;
-// 播放的数据
-@property (nonatomic, assign) float                  seekTime;
 
 // add for txvodplayer
 @property BOOL  isLoaded;
-
-@property NSURLSessionDataTask *getInfoHttpTask;
 
 @property (nonatomic) BOOL  isShiftPlayback;
 
@@ -96,18 +93,30 @@ TXVodPlayListener, TXLivePlayListener, CFDanmakuDelegate, SuperPlayerControlView
 /** 腾讯直播播放器 */
 @property (nonatomic, strong) TXLivePlayer               *livePlayer;
 
-@property (strong) TXImageSprite *imageSprite;
-
-@property NSArray *keyFrameDescList;
-
 @property NSDate *reportTime;
 
 @property NetWatcher *netWatcher;
 
 @property (nonatomic) CGFloat videoRatio;
 
+/// 由协议解析出分辨率定义表
+@property (strong, nonatomic) NSArray<SPSubStreamInfo *> *resolutions;
+/// 当前可用的分辨率列表
+//@property (strong, nonatomic) NSArray<NSString *> *currentResolutionNames;
 @end
 
 
+// ---------------------------------------------------------------
+
+@class AdaptiveStream;
+
+@interface SuperPlayerModel()
+
+//@property (nonatomic, strong) NSString *drmType;
+@property NSMutableArray<AdaptiveStream *> *streams;
+
+//- (BOOL)canSetDrmType:(NSString *)drmType;
+
+@end
 
 #endif /* SuperPlayerView_Private_h */

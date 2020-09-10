@@ -10,7 +10,6 @@
 #import "TXLiteAVSDKHeader.h"
 #import <MediaPlayer/MPMediaPickerController.h>
 #import <MobileCoreServices/UTCoreTypes.h>
-#import <AssetsLibrary/AssetsLibrary.h>
 #import "VideoPreview.h"
 #import "VideoRangeSlider.h"
 #import "VideoRangeConst.h"
@@ -33,6 +32,7 @@
 #import "TransitionView.h"
 #import "Masonry.h"
 #import "AppDelegate.h"
+#import "PhotoUtil.h"
 
 static const int ImageSlideFPS = 30;
 
@@ -937,7 +937,6 @@ typedef  NS_ENUM(NSInteger,VideoType)
     if (i++ % 100 == 0) {
         NSLog(@"onPreProcessTexture width:%f height:%f  timestamp:%f", width, height,timestamp/1000.0);
     }
-    NSLog(@"-------------------- texture ~");
     
     return texture;
 }
@@ -1296,17 +1295,28 @@ typedef  NS_ENUM(NSInteger,VideoType)
                 }
                 CGImageDestinationFinalize(destination);
                 CFRelease(destination);
-                NSData *data = [NSData dataWithContentsOfFile:_gifOutputPath];
-                // 保存到本地相册
-                ALAssetsLibrary *library = [[ALAssetsLibrary alloc] init];
-                [library writeImageDataToSavedPhotosAlbum:data metadata:nil completionBlock:^(NSURL *assetURL, NSError *error) {
-                    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"gif生成成功，已经保存到系统相册，请前往系统相册查看" message:nil delegate:self cancelButtonTitle:@"知道了" otherButtonTitles:nil, nil];
-                    [alert show];
-                }] ;
+                NSData *data = [NSData dataWithContentsOfFile:self->_gifOutputPath];
+                [PhotoUtil saveDataToAlbum:data
+                                completion:^(BOOL success, NSError * _Nullable error) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (success) {
+                            UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"gif生成成功，已经保存到系统相册，请前往系统相册查看" message:nil delegate:self cancelButtonTitle:@"知道了" otherButtonTitles:nil, nil];
+                            [alert show];
+                        } else {
+                            UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"gif 保存失败"
+                                                                            message:error.localizedDescription
+                                                                           delegate:self
+                                                                  cancelButtonTitle:@"知道了"
+                                                                  otherButtonTitles:nil];
+                            [alert show];
+                        }
+                    });
+                }];
             });
         }
         return YES;
     }];
 }
+
 
 @end

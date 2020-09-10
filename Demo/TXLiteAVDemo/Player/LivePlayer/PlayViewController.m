@@ -19,9 +19,46 @@
 #import "ZipArchive.h"
 #import "AddressBarController.h"
 #import "AppDelegate.h"
+#import "TXLiveBase.h"
+
+static NSString * const LIVE_URL = @"http://5815.liveplay.myqcloud.com/live/5815_89aad37e06ff11e892905cb9018cf0d4_900.flv";
+
 #define TEST_MUTE   0
 
 #define RTMP_URL    @"请输入或扫二维码获取播放地址"//请输入或扫二维码获取播放地址"
+
+@interface ToastTextView : UITextView
+@property (nonatomic) NSString *url;
+@end
+
+@implementation ToastTextView
+
+- (void)setUrl:(NSString *)url {
+    _url = url;
+    
+    NSRange r = [self.text rangeOfString:url];
+    if (r.location != NSNotFound) {
+        NSMutableAttributedString *str = [[NSMutableAttributedString alloc] initWithString:self.text];
+        [str addAttribute:NSLinkAttributeName value:url range:r];
+        self.attributedText = str;
+    }
+}
+
+-(void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
+    UITouch *touch = [touches anyObject]; //assume just 1 touch
+    if(touch.tapCount == 1) {
+        //single tap occurred
+        if (self.url) {
+            UIApplication *myApp = [UIApplication sharedApplication];
+            if ([myApp canOpenURL:[NSURL URLWithString:self.url]]) {
+                [myApp openURL:[NSURL URLWithString:self.url]];
+            }
+        }
+    }
+}
+
+@end
+
 
 typedef NS_ENUM(NSInteger, ENUM_TYPE_CACHE_STRATEGY)
 {
@@ -36,7 +73,7 @@ typedef NS_ENUM(NSInteger, ENUM_TYPE_CACHE_STRATEGY)
 #define CACHE_TIME_AUTO_MIN         5.0f
 #define CACHE_TIME_AUTO_MAX         10.0f
 
-#define PLAY_RECORD
+//#define PLAY_RECORD
 
 #ifdef PLAY_RECORD
 #import "LiveRecordPreviewViewController.h"
@@ -78,6 +115,7 @@ ScanQRDelegate
     UIView *    mVideoContainer;
     NSString    *_playUrl;
     UIButton    *_btnRecordVideo;
+    UIButton    *_btnRealTime;
     UILabel     *_labProgress;
     BOOL                _recordStart;
     float               _recordProgress;
@@ -154,7 +192,7 @@ ScanQRDelegate
     
     CGSize size = [[UIScreen mainScreen] bounds].size;
     
-    int icon_size = size.width / 11;
+    int icon_size = 46;
     
     CGFloat txtWidth = size.width- 25 - icon_size;
     int rightBtnNum = 1;
@@ -269,14 +307,16 @@ ScanQRDelegate
     }
     
     if (self.isLivePlay) {
-        _btnRecordVideo = [self createBottomBtnIndex:btn_index++ Icon:@"video_press" Action:@selector(clickRecord) Gap:icon_gap Size:icon_size];
-        [self.view addSubview:_btnRecordVideo];
-        
-        _labProgress = [[UILabel alloc]init];
-        _labProgress.frame = CGRectMake(_btnRecordVideo.left, _btnRecordVideo.top - 30 , 50, 30);
-        [_labProgress setText:@""];
-        [_labProgress setTextColor:[UIColor redColor]];
-        [self.view addSubview:_labProgress];
+//        _btnRecordVideo = [self createBottomBtnIndex:btn_index++ Icon:@"video_press" Action:@selector(clickRecord) Gap:icon_gap Size:icon_size];
+//        [self.view addSubview:_btnRecordVideo];
+//
+//        _labProgress = [[UILabel alloc]init];
+//        _labProgress.frame = CGRectMake(_btnRecordVideo.left, _btnRecordVideo.top - 30 , 50, 30);
+//        [_labProgress setText:@""];
+//        [_labProgress setTextColor:[UIColor redColor]];
+//        [self.view addSubview:_labProgress];
+        _btnRealTime = [self createBottomBtnIndex:btn_index++ Icon:@"jisu_off" Action:@selector(clickReal:) Gap:icon_gap Size:icon_size];
+        [self.view addSubview:_btnRealTime];
     }
     
     _videoPause = NO;
@@ -351,11 +391,19 @@ ScanQRDelegate
             self.title = @"低延时播放";
         } else {
 //            self.addressBarController.text = @"rtmp://live.hkstv.hk.lxdns.com/live/hks";
-            self.addressBarController.text = @"http://5815.liveplay.myqcloud.com/live/5815_89aad37e06ff11e892905cb9018cf0d4.flv";
+            self.addressBarController.text = LIVE_URL;
         }
     } else {
         self.title = @"点播播放器";
         self.addressBarController.text = @"http://200024424.vod.myqcloud.com/200024424_709ae516bdf811e6ad39991f76a4df69.f20.mp4";
+    }
+}
+
+- (void)_updateTitle {
+    if (self.isLivePlay) {
+        self.title = self.isRealtime ? @"低延时播放" : @"直播播放器";
+    } else {
+        self.title = @"点播播放器";
     }
 }
 
@@ -479,7 +527,9 @@ ScanQRDelegate
 
 - (void)setIsRealtime:(BOOL)isRealtime
 {
+    if (_isRealtime == isRealtime) return;
     _isRealtime = isRealtime;
+    [self _updateTitle];
 }
 
 -(BOOL)isVODType:(int)playType {
@@ -493,6 +543,12 @@ ScanQRDelegate
     if (self.isLivePlay) {
         if (self.isRealtime) {
             _playType = PLAY_TYPE_LIVE_RTMP_ACC;
+            if (!([playUrl containsString:@"txSecret"] || [playUrl containsString:@"txTime"])) {
+                ToastTextView *toast = [self toastTip:@"低延时拉流地址需要防盗链签名，详情参考 https://cloud.tencent.com/document/product/454/7880#RealTimePlay"];
+                toast.url = @"https://cloud.tencent.com/document/product/454/7880#RealTimePlay";
+                return NO;
+            }
+    
         }
         else {
             if ([playUrl hasPrefix:@"rtmp:"]) {
@@ -1057,6 +1113,16 @@ ScanQRDelegate
         [sender setImage:[UIImage imageNamed:@"cache2"] forState:UIControlStateNormal];
     }
 }
+- (void)clickReal:(UIButton *)sender {
+    self.isRealtime = !self.isRealtime;
+    if (self.isRealtime) {
+        [sender setImage:[UIImage imageNamed:@"jisu_on"] forState:UIControlStateNormal];
+        [self addressBarControllerTapCreateURL:_addressBarController];
+    } else {
+        [sender setImage:[UIImage imageNamed:@"jisu_off"] forState:UIControlStateNormal];
+        self.addressBarController.text = LIVE_URL;
+    }
+}
 /**
  @method 获取指定宽度width的字符串在UITextView上的高度
  @param textView 待计算的UITextView
@@ -1068,12 +1134,12 @@ ScanQRDelegate
     return sizeToFit.height + 10;
 }
 
-- (void) toastTip:(NSString*)toastInfo
+- (ToastTextView *) toastTip:(NSString*)toastInfo
 {
     CGRect frameRC = [[UIScreen mainScreen] bounds];
     frameRC.origin.y = frameRC.size.height - 110;
     frameRC.size.height -= 110;
-    __block UITextView * toastView = [[UITextView alloc] init];
+    __block ToastTextView * toastView = [[ToastTextView alloc] init];
     
     toastView.editable = NO;
     toastView.selectable = NO;
@@ -1094,6 +1160,7 @@ ScanQRDelegate
         [toastView removeFromSuperview];
         toastView = nil;
     });
+    return toastView;
 }
 
 #pragma ###TXLivePlayListener
@@ -1260,7 +1327,6 @@ ScanQRDelegate
 }
 
 - (BOOL)onPlayerPixelBuffer:(CVPixelBufferRef)pixelBuffer {
-    NSLog(@"--------------- pixel buffer ~");
     return NO;
 }
 @end

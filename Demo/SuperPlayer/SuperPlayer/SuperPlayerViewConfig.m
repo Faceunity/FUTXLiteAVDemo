@@ -6,6 +6,8 @@
 //
 
 #import "SuperPlayerViewConfig.h"
+#import "SuperPlayer.h"
+#import "TXLiveSDKTypeDef.h"
 
 @implementation SuperPlayerViewConfig
 
@@ -14,7 +16,9 @@
     self.hwAcceleration = 1;
     self.playRate = 1;
     self.renderMode = RENDER_MODE_FILL_EDGE;
-    
+    self.maxCacheItem = 5;
+    self.playShiftDomain = @"playtimeshift.live.myqcloud.com";
+    self.enableLog = YES;
     return self;
 }
 

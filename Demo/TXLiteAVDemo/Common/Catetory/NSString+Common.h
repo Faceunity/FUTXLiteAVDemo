@@ -6,7 +6,9 @@
 //
 
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
+#if TARGET_OS_IOS
+#import "NSString+UISize.m"
+#endif
 
 char pinyinFirstLetter(unsigned short hanzi);
 
@@ -89,10 +91,5 @@ char pinyinFirstLetter(unsigned short hanzi);
 
 //递归计算符合规定的文本长度
 - (NSString *)cutBeyondTextInLength:(NSInteger)maxLenth;
-
-- (CGSize)textSizeIn:(CGSize)size font:(UIFont *)font;
-- (CGSize)textSizeIn:(CGSize)size font:(UIFont *)font breakMode:(NSLineBreakMode)breakMode;
-- (CGSize)textSizeIn:(CGSize)size font:(UIFont *)font breakMode:(NSLineBreakMode)breakMode align:(NSTextAlignment)alignment;
-
 
 @end
