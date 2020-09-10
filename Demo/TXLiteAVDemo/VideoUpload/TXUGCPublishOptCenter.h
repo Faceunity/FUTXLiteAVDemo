@@ -12,16 +12,21 @@
 
 + (instancetype)shareInstance;
 @property (atomic, assign)  BOOL isStarted;
-@property(nonatomic,strong) NSString * signature;
-@property (strong, nonatomic) NSMutableDictionary *dnsCache;
+@property (strong, nonatomic) NSString * signature;
+@property (strong, nonatomic) NSMutableDictionary *cacheMap;
+@property (strong, nonatomic) NSMutableDictionary *fixCacheMap;
 @property (strong, nonatomic) NSMutableDictionary *publishingList;
+@property (strong, nonatomic) NSString *bestCosRegion;
+@property (strong, nonatomic) NSString *bestCosDomain;
+@property (nonatomic, assign) UInt64 minCosRespTime;
 
-- (void) prepareUpload:(NSString *)signature;
-- (NSString*) query:(NSString *)hostname;
-- (BOOL) useProxy;
-- (BOOL) useHttpDNS:(NSString *)hostname;
-- (void) addPublishing:(NSString *)videoPath;
-- (void) delPublishing:(NSString *)videoPath;
-- (BOOL) isPublishingPublishing:(NSString *)videoPath;
+- (void)prepareUpload:(NSString *)signature;
+- (NSArray *)query:(NSString *)hostname;
+- (NSString *)getCosRegion;
+- (BOOL)useProxy;
+- (BOOL)useHttpDNS:(NSString *)hostname;
+- (void)addPublishing:(NSString *)videoPath;
+- (void)delPublishing:(NSString *)videoPath;
+- (BOOL)isPublishingPublishing:(NSString *)videoPath;
 
 @end

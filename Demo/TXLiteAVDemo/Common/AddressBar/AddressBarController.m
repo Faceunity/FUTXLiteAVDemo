@@ -70,7 +70,7 @@ static NSString * const CellIdentifier = @"Cell";
 
 - (IBAction)onShowQR:(id)sender {
     if (self.qrPresentView) {
-        CGRect frame = UIEdgeInsetsInsetRect(self.qrPresentView.bounds, UIEdgeInsetsMake(100, 50, 80, 50));
+        CGRect frame = UIEdgeInsetsInsetRect(self.qrPresentView.bounds, UIEdgeInsetsMake(90, 15, 80, 15));
         UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
         CGFloat h_size = (CGRectGetWidth(frame) - 20) /2;
         CGFloat v_size = (CGRectGetHeight(frame) - 20) / 2;

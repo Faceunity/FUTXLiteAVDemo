@@ -7,7 +7,6 @@
 //
 
 #import "ListVideoCell.h"
-#import "TXVodPlayer.h"
 #import "Masonry.h"
 #import "UIImageView+WebCache.h"
 #import "SuperPlayer.h"
@@ -15,7 +14,9 @@
 @implementation ListVideoUrl
 @end
 
-@implementation ListVideoModel
+@implementation ListVideoModel {
+    SuperPlayerModel *_model;
+}
 - (void)addHdUrl:(NSString *)url withTitle:(NSString *)title;
 {
     NSMutableArray *urls = @[].mutableCopy;
@@ -29,11 +30,21 @@
     _hdUrl = urls;
 }
 
+- (void)setModel:(SuperPlayerModel *)model
+{
+    _model = model;
+}
+
 - (SuperPlayerModel *)getPlayerModel
 {
+    if (_model) {
+        return _model;
+    }
     SuperPlayerModel *model = [SuperPlayerModel new];
+    SuperPlayerVideoId *videoId = [SuperPlayerVideoId new];
     model.appId = [self appId];
-    model.fileId = [self fileId];
+    videoId.fileId = [self fileId];
+    model.videoId = videoId;
     model.videoURL = self.url;
     
     if (self.hdUrl) {
@@ -59,7 +70,7 @@
 @end
 
 @implementation ListVideoCell {
-    
+    ListVideoModel *_source;
 }
 
 - (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier
@@ -118,10 +129,10 @@
 
 - (void)setDataSource:(ListVideoModel *)source;
 {
-    _dataSource = source;
+    _source = source;
     
     int duration = source.duration;
-    [self.thumb sd_setImageWithURL:[NSURL URLWithString:_dataSource.coverUrl]
+    [self.thumb sd_setImageWithURL:[NSURL URLWithString:_source.coverUrl]
                   placeholderImage:SuperPlayerImage(@"loading_bgView")];
     if (source.type == 0) {
         self.durationLabel.text = [NSString stringWithFormat:@"%02d:%02d", duration / 60, duration % 60];
@@ -131,7 +142,12 @@
 
 - (SuperPlayerModel *)getPlayerModel
 {
-    return [_dataSource getPlayerModel];
+    return [_source getPlayerModel];
+}
+
+- (ListVideoModel *)getSource
+{
+    return _source;
 }
 
 @end

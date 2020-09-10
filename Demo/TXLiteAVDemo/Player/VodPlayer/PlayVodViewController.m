@@ -9,7 +9,6 @@
 #import "PlayVodViewController.h"
 #import "TXLiveBase.h"
 #import "ScanQRController.h"
-#import <AssetsLibrary/AssetsLibrary.h>
 #import <mach/mach.h>
 #ifndef UGC_SMART
 #import "AppLogMgr.h"
@@ -110,7 +109,7 @@ TXBitrateViewDelegate
     
     CGSize size = [[UIScreen mainScreen] bounds].size;
     
-    int icon_size = size.width / 10;
+    int icon_size = 46;
     
     _cover = [[UIView alloc]init];
     _cover.frame  = CGRectMake(10.0f, 55 + 2*icon_size, size.width - 20, size.height - 75 - 3 * icon_size);
@@ -230,8 +229,8 @@ TXBitrateViewDelegate
     
 //    _helpBtn = [self createBottomBtnIndex:btn_index++ Icon:@"help.png" Action:@selector(onHelpBtnClicked:) Gap:icon_gap Size:icon_size];
 
-    _txLivePlayer = [[TXVodPlayer alloc] init];
-    //_txLivePlayerPreload = [[TXVodPlayer alloc] init];
+    _txVodPlayer = [[TXVodPlayer alloc] init];
+    //_txVodPlayerPreload = [[TXVodPlayer alloc] init];
 
     _videoPause = NO;
     _trackingTouchTS = 0;
@@ -290,7 +289,7 @@ TXBitrateViewDelegate
 }
 
 - (void)onSelectBitrateIndex {
-    [_txLivePlayer setBitrateIndex:_bitrateView.selectedIndex];
+    [_txVodPlayer setBitrateIndex:_bitrateView.selectedIndex];
 }
 
 //在低系统（如7.1.2）可能收不到这个回调，请在onAppDidEnterBackGround和onAppWillEnterForeground里面处理打断逻辑
@@ -302,7 +301,7 @@ TXBitrateViewDelegate
         if (_play_switch == YES && _appIsInterrupt == NO) {
             //            if ([self isVODType:_playType]) {
             //                if (!_videoPause) {
-            //                    [_txLivePlayer pause];
+            //                    [_txVodPlayer pause];
             //                }
             //            }
             _appIsInterrupt = YES;
@@ -315,7 +314,7 @@ TXBitrateViewDelegate
              if (_play_switch == YES && _appIsInterrupt == YES) {
              if ([self isVODType:_playType]) {
              if (!_videoPause) {
-             [_txLivePlayer resume];
+             [_txVodPlayer resume];
              }
              }
              _appIsInterrupt = NO;
@@ -328,7 +327,7 @@ TXBitrateViewDelegate
 - (void)onAppDidEnterBackGround:(UIApplication*)app {
     if (_play_switch == YES) {
             if (!_videoPause) {
-                [_txLivePlayer pause];
+                [_txVodPlayer pause];
             }
     }
 }
@@ -336,7 +335,7 @@ TXBitrateViewDelegate
 - (void)onAppWillEnterForeground:(UIApplication*)app {
     if (_play_switch == YES) {
             if (!_videoPause) {
-                [_txLivePlayer resume];
+                [_txVodPlayer resume];
             }
     }
 }
@@ -344,7 +343,7 @@ TXBitrateViewDelegate
 - (void)onAppDidBecomeActive:(UIApplication*)app {
     if (_play_switch == YES && _appIsInterrupt == YES) {
             if (!_videoPause) {
-                [_txLivePlayer resume];
+                [_txVodPlayer resume];
             }
         _appIsInterrupt = NO;
     }
@@ -390,29 +389,8 @@ TXBitrateViewDelegate
     _lastTime = _startTime;
 }
 
--(BOOL)checkPlayUrl:(NSString*)playUrl {
-
-    if ([playUrl hasPrefix:@"https:"] || [playUrl hasPrefix:@"http:"]) {
-        if ([playUrl rangeOfString:@".flv"].length > 0) {
-            
-        } else if ([playUrl rangeOfString:@".m3u8"].length > 0 || [playUrl rangeOfString:@".M3U8"].length > 0){
-            
-        } else if ([playUrl rangeOfString:@".mp4"].length > 0 || [playUrl rangeOfString:@".MP4"].length > 0){
-            
-        } else {
-            [self toastTip:@"播放地址不合法，点播目前仅支持flv,hls,mp4播放方式!"];
-            return NO;
-        }
-    }
-    
-    return YES;
-}
-
 -(BOOL)startPlay{
     NSString* playUrl = self.txtRtmpUrl.text;
-    if (![self checkPlayUrl:playUrl]) {
-        return NO;
-    }
     
     [self clearLog];
     
@@ -429,11 +407,9 @@ TXBitrateViewDelegate
     [_logViewEvt setText:_logMsg];
     
     _bitrateView.selectedIndex = 0;
-    if(_txLivePlayer != nil)
+    if(_txVodPlayer != nil)
     {
-        _txLivePlayer.vodDelegate = self;
-        //        _txLivePlayer.recordDelegate = self;
-        //        _txLivePlayer.videoProcessDelegate = self;
+        _txVodPlayer.vodDelegate = self;
         
         if (_config == nil)
         {
@@ -452,12 +428,14 @@ TXBitrateViewDelegate
 //                            };
         //        _config.playerPixelFormatType = kCVPixelFormatType_32BGRA;
 //        _config.playerType = PLAYER_AVPLAYER;
-        [_txLivePlayer setConfig:_config];
-//        [_txLivePlayer setMute:YES];
-        _config.progressInterval = 0.02;
+        _config.maxBufferSize = 5; // 100M缓存
+        [_txVodPlayer setConfig:_config];
+//        [_txVodPlayer setMute:YES];
+        _config.progressInterval = 0.1;
         
-//                _txLivePlayer.isAutoPlay = NO;
-        int result = [_txLivePlayer startPlay:playUrl];
+        
+//                _txVodPlayer.isAutoPlay = NO;
+        int result = [_txVodPlayer startPlay:playUrl];
         if( result != 0)
         {
             NSLog(@"播放器启动失败");
@@ -465,14 +443,14 @@ TXBitrateViewDelegate
         }
         
         if (_screenPortrait) {
-            [_txLivePlayer setRenderRotation:HOME_ORIENTATION_RIGHT];
+            [_txVodPlayer setRenderRotation:HOME_ORIENTATION_RIGHT];
         } else {
-            [_txLivePlayer setRenderRotation:HOME_ORIENTATION_DOWN];
+            [_txVodPlayer setRenderRotation:HOME_ORIENTATION_DOWN];
         }
         if (_renderFillScreen) {
-            [_txLivePlayer setRenderMode:RENDER_MODE_FILL_SCREEN];
+            [_txVodPlayer setRenderMode:RENDER_MODE_FILL_SCREEN];
         } else {
-            [_txLivePlayer setRenderMode:RENDER_MODE_FILL_EDGE];
+            [_txVodPlayer setRenderMode:RENDER_MODE_FILL_EDGE];
         }
         
         [self startLoadingAnimation];
@@ -481,9 +459,9 @@ TXBitrateViewDelegate
         [_btnPlay setImage:[UIImage imageNamed:@"suspend"] forState:UIControlStateNormal];
         _play_switch = YES;
         
-//        [_txLivePlayerPreload setConfig:_config];
-//        _txLivePlayerPreload.isAutoPlay = NO;
-//        [_txLivePlayerPreload startPlay:@"http://1253131631.vod2.myqcloud.com/26f327f9vodgzp1253131631/d6ea9ea19031868222910147355/f0.mp4"];
+//        [_txVodPlayerPreload setConfig:_config];
+//        _txVodPlayerPreload.isAutoPlay = NO;
+//        [_txVodPlayerPreload startPlay:@"http://1253131631.vod2.myqcloud.com/26f327f9vodgzp1253131631/d6ea9ea19031868222910147355/f0.mp4"];
     }
     [self startLoadingAnimation];
     _startPlayTS = [[NSDate date]timeIntervalSince1970]*1000;
@@ -497,9 +475,9 @@ TXBitrateViewDelegate
 - (void)stopPlay{
     _playUrl = @"";
     [self stopLoadingAnimation];
-    if(_txLivePlayer != nil)
+    if(_txVodPlayer != nil)
     {
-        [_txLivePlayer stopPlay];
+        [_txVodPlayer stopPlay];
     }
     [[AFNetworkReachabilityManager sharedManager] setReachabilityStatusChangeBlock:nil];
 }
@@ -511,11 +489,11 @@ TXBitrateViewDelegate
     {
         
         if (_videoPause) {
-            [_txLivePlayer resume];
+            [_txVodPlayer resume];
             [sender setImage:[UIImage imageNamed:@"suspend"] forState:UIControlStateNormal];
             [[UIApplication sharedApplication] setIdleTimerDisabled:YES];
         } else {
-            [_txLivePlayer pause];
+            [_txVodPlayer pause];
             [sender setImage:[UIImage imageNamed:@"start"] forState:UIControlStateNormal];
             [[UIApplication sharedApplication] setIdleTimerDisabled:NO];
         }
@@ -567,7 +545,7 @@ TXBitrateViewDelegate
         _log_switch = YES;
     }
     
-        [_txLivePlayer snapshot:^(UIImage *img) {
+        [_txVodPlayer snapshot:^(UIImage *img) {
             img = nil;
         }];
 }
@@ -577,10 +555,10 @@ TXBitrateViewDelegate
     
     if (_screenPortrait) {
         [sender setImage:[UIImage imageNamed:@"landscape"] forState:UIControlStateNormal];
-        [_txLivePlayer setRenderRotation:HOME_ORIENTATION_RIGHT];
+        [_txVodPlayer setRenderRotation:HOME_ORIENTATION_RIGHT];
     } else {
         [sender setImage:[UIImage imageNamed:@"portrait"] forState:UIControlStateNormal];
-        [_txLivePlayer setRenderRotation:HOME_ORIENTATION_DOWN];
+        [_txVodPlayer setRenderRotation:HOME_ORIENTATION_DOWN];
     }
 }
 
@@ -589,10 +567,10 @@ TXBitrateViewDelegate
     
     if (_renderFillScreen) {
         [sender setImage:[UIImage imageNamed:@"adjust"] forState:UIControlStateNormal];
-        [_txLivePlayer setRenderMode:RENDER_MODE_FILL_SCREEN];
+        [_txVodPlayer setRenderMode:RENDER_MODE_FILL_SCREEN];
     } else {
         [sender setImage:[UIImage imageNamed:@"fill"] forState:UIControlStateNormal];
-        [_txLivePlayer setRenderMode:RENDER_MODE_FILL_EDGE];
+        [_txVodPlayer setRenderMode:RENDER_MODE_FILL_EDGE];
     }
 }
 
@@ -600,12 +578,12 @@ TXBitrateViewDelegate
 - (void)clickMute:(UIButton*)sender
 {
     if (sender.isSelected) {
-        [_txLivePlayer setMute:NO];
+        [_txVodPlayer setMute:NO];
         [sender setSelected:NO];
         [sender setImage:[UIImage imageNamed:@"mic"] forState:UIControlStateNormal];
     }
     else {
-        [_txLivePlayer setMute:YES];
+        [_txVodPlayer setMute:YES];
         [sender setSelected:YES];
         [sender setImage:[UIImage imageNamed:@"vodplay"] forState:UIControlStateNormal];
     }
@@ -623,9 +601,9 @@ TXBitrateViewDelegate
         [self stopPlay];
     }
     
-    _txLivePlayer.enableHWAcceleration = !_bHWDec;
+    _txVodPlayer.enableHWAcceleration = !_bHWDec;
     
-    _bHWDec = _txLivePlayer.enableHWAcceleration;
+    _bHWDec = _txVodPlayer.enableHWAcceleration;
     
     if(_bHWDec)
     {
@@ -672,7 +650,7 @@ TXBitrateViewDelegate
 
 #pragma -- UISlider - play seek
 -(void)onSeek:(UISlider *)slider{
-    [_txLivePlayer seek:_sliderValue];
+    [_txVodPlayer seek:_sliderValue];
     _trackingTouchTS = [[NSDate date]timeIntervalSince1970]*1000;
     _startSeek = NO;
     NSLog(@"vod seek drag end");
@@ -783,7 +761,7 @@ TXBitrateViewDelegate
         if (EvtID == PLAY_EVT_RCV_FIRST_I_FRAME) {
             
             //            _publishParam = nil;
-                [_txLivePlayer setupVideoWidget:mVideoContainer insertIndex:0];
+                [_txVodPlayer setupVideoWidget:mVideoContainer insertIndex:0];
         }
         
         if (EvtID == PLAY_EVT_VOD_LOADING_END || EvtID == PLAY_EVT_VOD_PLAY_PREPARED) {
@@ -796,7 +774,7 @@ TXBitrateViewDelegate
             long long playDelay = [[NSDate date]timeIntervalSince1970]*1000 - _startPlayTS;
             AppDemoLog(@"AutoMonitor:PlayFirstRender,cost=%lld", playDelay);
 #endif
-            NSArray *supportedBitrates = [_txLivePlayer supportedBitrates];
+            NSArray *supportedBitrates = [_txVodPlayer supportedBitrates];
             _bitrateView.dataSource = supportedBitrates;
             _bitrateView.center = CGPointMake(self.view.width-_bitrateView.width/2, self.view.height/2);
         } else if (EvtID == PLAY_EVT_PLAY_PROGRESS) {
@@ -879,8 +857,8 @@ TXBitrateViewDelegate
         int netspeed  = [(NSNumber*)[dict valueForKey:NET_STATUS_NET_SPEED] intValue];
         int vbitrate  = [(NSNumber*)[dict valueForKey:NET_STATUS_VIDEO_BITRATE] intValue];
         int abitrate  = [(NSNumber*)[dict valueForKey:NET_STATUS_AUDIO_BITRATE] intValue];
-        int cachesize = [(NSNumber*)[dict valueForKey:NET_STATUS_CACHE_SIZE] intValue];
-        int dropsize  = [(NSNumber*)[dict valueForKey:NET_STATUS_DROP_SIZE] intValue];
+        int cachesize = [(NSNumber*)[dict valueForKey:NET_STATUS_VIDEO_CACHE] intValue];
+        int dropsize  = [(NSNumber*)[dict valueForKey:NET_STATUS_VIDEO_DROP] intValue];
         int jitter    = [(NSNumber*)[dict valueForKey:NET_STATUS_NET_JITTER] intValue];
         int fps       = [(NSNumber*)[dict valueForKey:NET_STATUS_VIDEO_FPS] intValue];
         int width     = [(NSNumber*)[dict valueForKey:NET_STATUS_VIDEO_WIDTH] intValue];
@@ -888,9 +866,9 @@ TXBitrateViewDelegate
         float cpu_usage = [(NSNumber*)[dict valueForKey:NET_STATUS_CPU_USAGE] floatValue];
         float cpu_app_usage = [(NSNumber*)[dict valueForKey:NET_STATUS_CPU_USAGE_D] floatValue];
         NSString *serverIP = [dict valueForKey:NET_STATUS_SERVER_IP];
-        int codecCacheSize = [(NSNumber*)[dict valueForKey:NET_STATUS_CODEC_CACHE] intValue];
-        int nCodecDropCnt = [(NSNumber*)[dict valueForKey:NET_STATUS_CODEC_DROP_CNT] intValue];
-        int nCahcedSize = [(NSNumber*)[dict valueForKey:NET_STATUS_CACHE_SIZE] intValue]/1000;
+        int codecCacheSize = [(NSNumber*)[dict valueForKey:NET_STATUS_AUDIO_CACHE] intValue];
+        int nCodecDropCnt = [(NSNumber*)[dict valueForKey:NET_STATUS_AUDIO_DROP] intValue];
+        int nCahcedSize = [(NSNumber*)[dict valueForKey:NET_STATUS_VIDEO_CACHE] intValue]/1000;
         
         NSString* log = [NSString stringWithFormat:@"CPU:%.1f%%|%.1f%%\tRES:%d*%d\tSPD:%dkb/s\nJITT:%d\tFPS:%d\tARA:%dkb/s\nQUE:%d|%d\tDRP:%d|%d\tVRA:%dkb/s\nSVR:%@\t\tCAH:%d kb",
                          cpu_app_usage*100,
@@ -933,7 +911,6 @@ TXBitrateViewDelegate
 
 - (BOOL)onPlayerPixelBuffer:(CVPixelBufferRef)pixelBuffer;
 {
-    NSLog(@"--------------- pixel buffer ~");
     return NO;
 }
 

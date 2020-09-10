@@ -10,6 +10,10 @@
 
 
 #define UGC_HOST        @"vod2.qcloud.com"
+#define UGC_HOST_BAK    @"vod2.dnsv1.com"
+
+// 最大请求次数
+#define kMaxRequestCount 2
 
 #pragma mark - UCG rsp parse
 
@@ -17,13 +21,13 @@
 #define kMessage        @"message"
 #define kData           @"data"
 
-#define TVCVersion @"5.3.6004"
+#define TVCVersion @"7.2.8927"
 
 #pragma mark - COS config
 //字段废弃，作为InitUploadUGC的占位字段
 #define kRegion @"gz"
 //超时时间
-#define kTimeoutInterval 8
+#define kTimeoutInterval 10
 
 //log
 #ifndef __OPTIMIZE__
@@ -115,6 +119,8 @@
 
 @property(nonatomic,assign) BOOL isShouldRetry;     // 由于临时签名过期导致的上传失败，重试
 
+@property(nonatomic,assign) int vodCmdRequestCount;   // vod信令请求次数
+
 @property(nonatomic,strong) NSData * resumeData;    // cos分片上传resumeData
 
 @end
@@ -167,5 +173,7 @@
 @property(atomic,assign) int retryCount;
 
 @property(nonatomic,assign) BOOL reporting;
+
+@property(nonatomic,strong) NSString * requestId;
 
 @end

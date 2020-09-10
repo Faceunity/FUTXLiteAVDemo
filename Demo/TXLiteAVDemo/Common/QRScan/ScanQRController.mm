@@ -27,9 +27,9 @@ static const char *kScanQRCodeQueueName = "ScanQRCodeQueue";
     CGSize size = [[UIScreen mainScreen] bounds].size;
     int c_x = size.width/2;
     int c_y = size.height/2;
-    int roi = 160/2;
+    int roi = size.width * 0.4;
     
-    _interestRect = CGRectMake(c_x - roi, c_y - roi, 160, 160);
+    _interestRect = CGRectMake(c_x - roi, c_y - roi, roi*2, roi*2);
     
     [self startScan];
     

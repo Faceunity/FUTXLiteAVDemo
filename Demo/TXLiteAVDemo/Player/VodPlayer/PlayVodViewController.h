@@ -13,8 +13,7 @@
 
 @interface PlayVodViewController : UIViewController
 {
-    TXVodPlayer *      _txLivePlayer;
-    TXVodPlayer *      _txLivePlayerPreload;
+    TXVodPlayer *      _txVodPlayer;
     UITextView*         _statusView;
     UITextView*         _logViewEvt;
     unsigned long long  _startTime;

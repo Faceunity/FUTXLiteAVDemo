@@ -8,7 +8,7 @@
 
 #import "MainViewController.h"
 #ifdef ENABLE_PUSH
-#import "PublishViewController.h"
+#import "CameraPushViewController.h"
 #endif
 #ifdef ENABLE_PLAY
 #import "PlayViewController.h"
@@ -18,52 +18,65 @@
 #endif
 #endif
 #ifdef ENABLE_UGC
-#import "VideoRecordConfigViewController.h"
-#import "QBImagePickerController.h"
+#import "UGCKitWrapper.h"
+#endif
+
+#if defined(ENABLE_PLAY) && !defined(DISABLE_VOD)
 #import "SuperPlayer.h"
 #endif
 
-#import "VideoLoadingController.h"
+#ifdef ENABLE_TRTC
+#import "TRTCNewViewController.h"
+#import "TXLiteAVSDK.h"
+#endif
+
 #import "ColorMacro.h"
 #import "MainTableViewCell.h"
-#import "TXLiveBase.h"
 
+#ifndef ENABLE_TRTC
+#import "TXLiveBase.h"
+#endif
 
 #define STATUS_BAR_HEIGHT [UIApplication sharedApplication].statusBarFrame.size.height
 
-#define OLD_VOD 0
+static NSString * const XiaoZhiBoAppStoreURLString = @"http://itunes.apple.com/cn/app/id1132521667?mt=8";
+static NSString * const XiaoShiPinAppStoreURLString = @"http://itunes.apple.com/cn/app/id1374099214?mt=8";
 
 @interface MainViewController ()<
-#ifdef ENABLE_UGC
-QBImagePickerControllerDelegate,
-#endif
 UITableViewDelegate,
 UITableViewDataSource,
 UIPickerViewDataSource,
 UIPickerViewDelegate,
 UIAlertViewDelegate
 >
-
+#ifdef ENABLE_UGC
+@property (strong, nonatomic) UGCKitWrapper *ugcWrapper;
+#endif
 @property (nonatomic) NSMutableArray<CellInfo*>* cellInfos;
 @property (nonatomic) NSArray<CellInfo*>* addNewCellInfos;
 @property (nonatomic) MainTableViewCell *selectedCell;
 @property (nonatomic) UITableView* tableView;
 @property (nonatomic) UIView*   logUploadView;
 @property (nonatomic) UIPickerView* logPickerView;
-#ifdef ENABLE_UGC
-@property (nonatomic) QBImagePickerMediaType mediaType;
-#endif
 @property (nonatomic) NSMutableArray* logFilesArray;
 
 @end
 
 @implementation MainViewController
 
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    self.navigationController.navigationBar.hidden = YES;
+}
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view.
-    
+#ifdef ENABLE_UGC
+    _ugcWrapper = [[UGCKitWrapper alloc] initWithViewController:self theme:nil];
+#endif
+
     [self initCellInfos];
     [self initUI];
 }
@@ -73,28 +86,45 @@ UIAlertViewDelegate
     _cellInfos = [NSMutableArray new];
     CellInfo* cellInfo = nil;
     
-#ifdef ENABLE_PUSH
+#if defined(ENABLE_PUSH) || defined(ENABLE_PLAY)
     cellInfo = [CellInfo new];
-    cellInfo.title = @"直播";
+    cellInfo.title = @"移动直播";
     cellInfo.iconName = @"live_room";
     [_cellInfos addObject:cellInfo];
     cellInfo.subCells = ({
         NSMutableArray *subCells = [NSMutableArray new];
         CellInfo* scellInfo;
-#ifdef ENABLE_PLAY
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"美女直播";
-        scellInfo.navigateToController = @"LiveRoomListViewController";
+        
+#if defined(ENABLE_PUSH) && defined(ENABLE_PLAY)
+        scellInfo = [CellInfo cellInfoWithTitle:@"MLVBLiveRoom"
+                       controllerClassName:@"LiveRoomListViewController"];
         [subCells addObject:scellInfo];
 #endif
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"录屏直播";
-        scellInfo.navigateToController = @"Replaykit2ViewController";
+        
+#ifdef ENABLE_PUSH
+        scellInfo = [CellInfo cellInfoWithTitle:@"摄像头推流"
+                       controllerClassName:@"CameraPushViewController"];
         [subCells addObject:scellInfo];
         
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"小直播";
-        scellInfo.navigateToController = nil;
+#endif
+        
+#ifdef ENABLE_PLAY
+        scellInfo = [CellInfo cellInfoWithTitle:@"直播拉流"
+                       controllerClassName:@"PlayViewController"];
+        [subCells addObject:scellInfo];
+#endif
+        
+#if defined(ENABLE_PUSH) && defined(ENABLE_PLAY)
+        scellInfo = [CellInfo cellInfoWithTitle:@"录屏直播"
+                              controllerClassName:@"ScreenPushViewController"];
+        [subCells addObject:scellInfo];
+#endif
+        
+        scellInfo = [CellInfo cellInfoWithTitle:@"小直播" actionBlock:^{
+            // 打开小直播AppStore
+            [[UIApplication sharedApplication]
+             openURL:[NSURL URLWithString:XiaoZhiBoAppStoreURLString]];
+        }];
         [subCells addObject:scellInfo];
         
         subCells;
@@ -102,8 +132,6 @@ UIAlertViewDelegate
 #endif
 
 #if defined(ENABLE_PLAY) && !defined(DISABLE_VOD)
-
-
     cellInfo = [CellInfo new];
     cellInfo.title = @"播放器";
     cellInfo.iconName = @"composite";
@@ -111,12 +139,10 @@ UIAlertViewDelegate
     cellInfo.subCells = ({
         NSMutableArray *subCells = [NSMutableArray new];
         CellInfo* scellInfo;
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"超级播放器";
-        scellInfo.navigateToController = @"MoviePlayerViewController";
+        scellInfo = [CellInfo cellInfoWithTitle:@"超级播放器"
+                       controllerClassName:@"MoviePlayerViewController"];
         [subCells addObject:scellInfo];
         subCells;
-    
     });
 #endif
     
@@ -125,111 +151,134 @@ UIAlertViewDelegate
     cellInfo.title = @"短视频";
     cellInfo.iconName = @"video";
     [_cellInfos addObject:cellInfo];
+    __weak __typeof(self) weakSelf = self;
     cellInfo.subCells = ({
         NSMutableArray *subCells = [NSMutableArray new];
         CellInfo* scellInfo;
         
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"视频录制";
-        scellInfo.navigateToController = @"VideoRecordConfigViewController";
+        scellInfo = [CellInfo cellInfoWithTitle:@"视频录制" actionBlock:^{
+            [weakSelf.ugcWrapper showRecordEntryController];
+        }];
         [subCells addObject:scellInfo];
         
 #ifndef UGC_SMART        
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"特效编辑";
-        scellInfo.navigateToController = @"QBImagePickerController";
+        scellInfo = [CellInfo cellInfoWithTitle:@"特效编辑" actionBlock:^{
+            [weakSelf.ugcWrapper showEditEntryControllerWithType:UGCKitMediaTypeVideo];
+        }];
         [subCells addObject:scellInfo];
         
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"视频拼接";
-        scellInfo.navigateToController = @"QBImagePickerController";
+        scellInfo = [CellInfo cellInfoWithTitle:@"视频拼接" actionBlock:^{
+            [weakSelf.ugcWrapper showVideoJoinEntryController];
+        }];
         [subCells addObject:scellInfo];
         
-        
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"图片转场";
-        scellInfo.navigateToController = @"QBImagePickerController";
+        scellInfo = [CellInfo cellInfoWithTitle:@"图片转场" actionBlock:^{
+            [weakSelf.ugcWrapper showEditEntryControllerWithType:UGCKitMediaTypePhoto];
+        }];
         [subCells addObject:scellInfo];
 #endif
         
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"视频上传";
-        scellInfo.navigateToController = @"QBImagePickerController";
+        scellInfo = [CellInfo cellInfoWithTitle:@"视频上传" actionBlock:^{
+            [weakSelf.ugcWrapper showVideoUploadEntryController];
+        }];
         [subCells addObject:scellInfo];
-        
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"小视频";
-        scellInfo.navigateToController = nil;
+
+        scellInfo = [CellInfo cellInfoWithTitle:@"小视频" actionBlock:^{
+            //打开小视频AppStore
+            [[UIApplication sharedApplication] openURL:[NSURL URLWithString:XiaoShiPinAppStoreURLString]];
+        }];
         [subCells addObject:scellInfo];
         
         subCells;
     });
 #endif
     
-#if defined(ENABLE_PLAY) && defined(ENABLE_PUSH)
+#if defined(ENABLE_TRTC)
     cellInfo = [CellInfo new];
-    cellInfo.title = @"视频通话";
+    cellInfo.title = @"实时音视频 TRTC";
     cellInfo.iconName = @"multi_room";
     [_cellInfos addObject:cellInfo];
     cellInfo.subCells = ({
         NSMutableArray *subCells = [NSMutableArray new];
         CellInfo* scellInfo;
-        
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"双人音视频";
-        scellInfo.navigateToController = @"RTCDoubleRoomListViewController";
+
+        CellInfo *(^createTRTCItem)(NSString *title, TRTCAppScene scene) =
+            ^(NSString *title, TRTCAppScene scene) {
+                return [CellInfo cellInfoWithTitle:title
+                      controllerCreationBlock:^UIViewController * _Nonnull{
+                    TRTCNewViewController *controller = [[TRTCNewViewController alloc] init];
+                    [controller setAppScene:scene];
+                    [controller setMenuTitle:title];
+                    return controller;
+                }];
+            };
+
+        [subCells addObject:createTRTCItem(@"腾讯云视频通话", TRTCAppSceneVideoCall)];
+        [subCells addObject:createTRTCItem(@"视频互动直播", TRTCAppSceneLIVE)];
+
+        scellInfo = [CellInfo cellInfoWithTitle:@"语音通话"
+                   controllerCreationBlock:^UIViewController * _Nonnull{
+            UIStoryboard *stroyBoard = [UIStoryboard storyboardWithName:@"TRTCAudioCall" bundle:nil];
+            UIViewController *controller = [stroyBoard instantiateViewControllerWithIdentifier:@"CreateTRTCAudioCallViewController"];
+            return controller;
+        }];
         [subCells addObject:scellInfo];
-        
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"多人音视频";
-        scellInfo.navigateToController = @"RTCMultiRoomListViewController";
+
+        scellInfo = [CellInfo cellInfoWithTitle:@"语音聊天室"
+                   controllerCreationBlock:^UIViewController * _Nonnull{
+            UIStoryboard *stroyBoard = [UIStoryboard storyboardWithName:@"TRTCVoiceRoom" bundle:nil];
+            UIViewController *controller = [stroyBoard instantiateViewControllerWithIdentifier:@"CreateTRTCVoiceRoomViewController"];
+            return controller;
+        }];
         [subCells addObject:scellInfo];
-        
+
         subCells;
     });
 #endif
-    
+
     cellInfo = [CellInfo new];
     cellInfo.title = @"调试工具";
     cellInfo.iconName = @"dbg_tool";
-    [_cellInfos addObject:cellInfo];
     cellInfo.subCells = ({
         NSMutableArray *subCells = [NSMutableArray new];
         CellInfo* scellInfo;
-#ifdef ENABLE_PUSH
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"RTMP 推流";
-        scellInfo.navigateToController = @"PublishViewController";
-        [subCells addObject:scellInfo];
-#endif
-#ifdef ENABLE_PLAY
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"直播播放器";
-        scellInfo.navigateToController = @"PlayViewController";
-        [subCells addObject:scellInfo];
-#endif
         
 #ifndef DISABLE_VOD
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"点播播放器";
-        scellInfo.navigateToController = @"PlayVodViewController";
+        scellInfo = [CellInfo cellInfoWithTitle:@"点播播放器"
+                       controllerClassName:@"PlayVodViewController"];
         [subCells addObject:scellInfo];
 #if 0
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"下载";
-        scellInfo.navigateToController = @"DownloadViewController";
+        scellInfo = [CellInfo cellInfoWithTitle:@"下载"
+                       controllerClassName:@"DownloadViewController"];
         [subCells addObject:scellInfo];
 #endif
 #endif
-#if defined(ENABLE_PLAY) && defined(ENABLE_PUSH)
 
-        scellInfo = [CellInfo new];
-        scellInfo.title = @"WebRTC Room";
-        scellInfo.navigateToController = @"WebRTCViewController";
-        [subCells addObject:scellInfo];
+#ifndef APPSTORE
+        
+#if defined(ENABLE_PLAY) && defined(ENABLE_PUSH)
+//        if (NSClassFromString(@"WebRTCViewController") != Nil) {
+//            scellInfo = [CellInfo new];
+//            scellInfo.title = @"微信-WebRTC Room";
+//            scellInfo.navigateToController = @"WebRTCViewController";
+//            [subCells addObject:scellInfo];
+//        }
+        if (NSClassFromString(@"TRTCWeChatRoomEntryViewController") != Nil) {
+            scellInfo = [CellInfo cellInfoWithTitle:@"微信视频会议"
+                       controllerCreationBlock:^UIViewController * _Nonnull{
+                UIStoryboard *stroyBoard = [UIStoryboard storyboardWithName:@"TrtcWeChat" bundle:nil];
+                UIViewController *controller = [stroyBoard instantiateViewControllerWithIdentifier:@"TRTCWeChatRoomEntryViewController"];
+                return controller;
+            }];
+            [subCells addObject:scellInfo];
+        }
+#endif
 #endif
         subCells;
     });
+    if ([cellInfo.subCells count] > 0) {
+        [_cellInfos addObject:cellInfo];
+    }
 }
 
 - (void)initUI
@@ -398,105 +447,19 @@ UIAlertViewDelegate
         }
         return;
     }
-    
-    NSString* controllerClassName = cellInfo.navigateToController;
-    Class controllerClass = NSClassFromString(controllerClassName);
-    id controller = [[controllerClass alloc] init];
-    
-#ifdef ENABLE_PLAY
-    if ([cellInfo.title isEqualToString:@"直播播放器"]) {
-        ((PlayViewController*)controller).isLivePlay = YES;
-    }
-    else if ([cellInfo.title isEqualToString:@"低延时播放"]) {
-        ((PlayViewController*)controller).isLivePlay = YES;
-        ((PlayViewController*)controller).isRealtime = YES;
-    }
-#endif
-    
-    
-#ifdef ENABLE_UGC
-    if ([controller isKindOfClass:[VideoRecordConfigViewController class]]) {
-        controller = [[VideoRecordConfigViewController alloc] initWithNibName:@"VideoRecordConfigViewController" bundle:nil];
-    }
-    if ([controller isKindOfClass:[QBImagePickerController class]]) {
-        QBImagePickerController* imagePicker = ((QBImagePickerController*)controller);
-        imagePicker.delegate = self;
-        imagePicker.mediaType = QBImagePickerMediaTypeVideo;
-        if ([cellInfo.title isEqualToString:@"视频拼接"]) {
-            imagePicker.allowsMultipleSelection = YES;
-            imagePicker.showsNumberOfSelectedAssets = YES;
-            imagePicker.maximumNumberOfSelection = 10;
-            _mediaType = QBImagePickerMediaTypeVideo;
-        }
-        else if([cellInfo.title isEqualToString:@"视频上传"]){
-            imagePicker.allowsMultipleSelection = NO;
-            imagePicker.showsNumberOfSelectedAssets = NO;
-            _mediaType = QBImagePickerMediaTypeVideo;
-        }
-#ifndef UGC_SMART
-        else if([cellInfo.title isEqualToString:@"特效编辑"]){
-            imagePicker.allowsMultipleSelection = NO;
-            imagePicker.showsNumberOfSelectedAssets = NO;
-            imagePicker.mediaType = QBImagePickerMediaTypeVideo;
-            _mediaType = imagePicker.mediaType;
-        }
-        else if([cellInfo.title isEqualToString:@"图片转场"]){
-            imagePicker.allowsMultipleSelection = YES;
-            imagePicker.minimumNumberOfSelection = 3;
-            imagePicker.showsNumberOfSelectedAssets = YES;
-            imagePicker.mediaType = QBImagePickerMediaTypeImage;
-            _mediaType = imagePicker.mediaType;
-        }
-#endif
-//
-//        else{
-//            UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"选择图片还是视频编辑？" message:nil delegate:self cancelButtonTitle:@"图片" otherButtonTitles:@"视频", nil];
-//            [alert show];
-//            return;
-//        }
-    }
-    if ([cellInfo.title isEqualToString:@"小视频"]) {
-//        NSString *urlStr = [NSString stringWithFormat:@"itms-apps://itunes.apple.com/WebObjects/MZStore.woa/wa/viewSoftware?id=%@", @"1374099214"];
-        NSString *urlStr = [NSString stringWithFormat:@"http://itunes.apple.com/cn/app/id1374099214?mt=8"];
-        //打开链接地址
-        [[UIApplication sharedApplication] openURL:[NSURL URLWithString:urlStr]];
-        
-        return;
-    }
-#endif
-#ifdef ENABLE_PUSH
-    if ([cellInfo.title isEqualToString:@"小直播"]) {
-//        NSString *urlStr = [NSString stringWithFormat:@"itms-apps://itunes.apple.com/WebObjects/MZStore.woa/wa/viewSoftware?id=%@", @"1132521667"];
-        NSString *urlStr = [NSString stringWithFormat:@"http://itunes.apple.com/cn/app/id1132521667?mt=8"];
-        //打开链接地址
-        [[UIApplication sharedApplication] openURL:[NSURL URLWithString:urlStr]];
-        
-        return;
-    }
-#endif
-    [self.navigationController pushViewController:controller animated:YES];
-}
 
-#ifdef ENABLE_UGC
-- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
-{
-    QBImagePickerController* imagePicker = [[QBImagePickerController alloc] init];
-    imagePicker.delegate = self;
-    if (buttonIndex == 0) {
-        imagePicker.allowsMultipleSelection = YES;
-        imagePicker.minimumNumberOfSelection = 3;
-        imagePicker.showsNumberOfSelectedAssets = YES;
-        imagePicker.mediaType = QBImagePickerMediaTypeImage;
-        _mediaType = imagePicker.mediaType;
-    }else{
-        imagePicker.allowsMultipleSelection = NO;
-        imagePicker.showsNumberOfSelectedAssets = NO;
-        imagePicker.mediaType = QBImagePickerMediaTypeVideo;
-        _mediaType = imagePicker.mediaType;
+    if (cellInfo.type == CellInfoTypeEntry) {
+        UIViewController *controller = [cellInfo createEntryController];
+        if (controller) {
+            if (![controller isKindOfClass:NSClassFromString(@"MoviePlayerViewController")]) {
+                [self _hideSuperPlayer];
+            }
+            [self.navigationController pushViewController:controller animated:YES];
+        }
+    } else if (cellInfo.type == CellInfoTypeAction) {
+        [cellInfo performAction];
     }
-    [self.navigationController pushViewController:imagePicker animated:YES];
 }
-#endif
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
 {
@@ -507,44 +470,16 @@ UIAlertViewDelegate
     return 51;
 }
 
-#ifdef ENABLE_UGC
-#pragma mark - QBImagePickerControllerDelegate
-- (void)qb_imagePickerController:(QBImagePickerController *)imagePickerController didFinishPickingAssets:(NSArray *)assets
-{
-    [self.navigationController popViewControllerAnimated:YES];
-    
-    VideoLoadingController *loadvc = [[VideoLoadingController alloc] init];
-    NSInteger selectedRow = _tableView.indexPathForSelectedRow.row;
-    if (selectedRow >= _cellInfos.count)
-        return;
-    
-    CellInfo* cellInfo = _cellInfos[selectedRow];
-    if ([cellInfo.title isEqualToString:@"特效编辑"] || [cellInfo.title isEqualToString:@"图片转场"]) {
-        loadvc.composeMode = ComposeMode_Edit;
-    } else if ([cellInfo.title isEqualToString:@"视频拼接"]) {
-        loadvc.composeMode = ComposeMode_Join;
-    } else if ([cellInfo.title isEqualToString:@"视频上传"]) {
-        loadvc.composeMode = ComposeMode_Upload;
-    }
-    else return;
-    
-    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:loadvc];
-    [self presentViewController:nav animated:YES completion:nil];
-    [loadvc exportAssetList:assets assetType:_mediaType == QBImagePickerMediaTypeImage ? AssetType_Image : AssetType_Video];
-    
+#if defined(ENABLE_PLAY) && !defined(DISABLE_VOD)
+- (void)_hideSuperPlayer {
     if (SuperPlayerWindowShared.isShowing) {
         [SuperPlayerWindowShared hide];
         [SuperPlayerWindowShared.superPlayer resetPlayer];
+        SuperPlayerWindowShared.backController = nil;
     }
 }
-
-- (void)qb_imagePickerControllerDidCancel:(QBImagePickerController *)imagePickerController
-{
-    NSLog(@"imagePicker Canceled.");
-    
-    [self.navigationController popViewControllerAnimated:YES];
-    
-}
+#else
+- (void)_hideSuperPlayer {}
 #endif
 
 - (void)handleLongPress:(UILongPressGestureRecognizer *)pressRecognizer
@@ -555,6 +490,11 @@ UIAlertViewDelegate
         NSString *logDoc = [NSString stringWithFormat:@"%@%@", paths[0], @"/log"];
         NSFileManager *fileManager = [NSFileManager defaultManager];
         NSArray* fileArray = [fileManager contentsOfDirectoryAtPath:logDoc error:nil];
+        fileArray = [fileArray sortedArrayUsingComparator:^NSComparisonResult(id  _Nonnull obj1, id  _Nonnull obj2) {
+            NSString* file1 = (NSString*)obj1;
+            NSString* file2 = (NSString*)obj2;
+            return [file1 compare:file2] == NSOrderedDescending;
+        }];
         self.logFilesArray = [NSMutableArray new];
         for (NSString* logName in fileArray) {
             if ([logName hasSuffix:@"xlog"]) {
@@ -563,9 +503,10 @@ UIAlertViewDelegate
         }
         
         _logUploadView.alpha = 0.1;
+        UIView *logUploadView = _logUploadView;
         [UIView animateWithDuration:0.5 animations:^{
-            _logUploadView.hidden = NO;
-            _logUploadView.alpha = 1;
+            logUploadView.hidden = NO;
+            logUploadView.alpha = 1;
         }];
         [_logPickerView reloadAllComponents];
     }
@@ -587,12 +528,13 @@ UIAlertViewDelegate
         NSString* logPath = [logDoc stringByAppendingPathComponent:self.logFilesArray[row]];
         NSURL *shareobj = [NSURL fileURLWithPath:logPath];
         UIActivityViewController *activityView = [[UIActivityViewController alloc] initWithActivityItems:@[shareobj] applicationActivities:nil];
+        UIView *logUploadView = _logUploadView;
         [self presentViewController:activityView animated:YES completion:^{
-            _logUploadView.hidden = YES;
+            logUploadView.hidden = YES;
         }];
     }
 }
-
+#pragma mark - UIPickerView
 - (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView
 {
     return 1;

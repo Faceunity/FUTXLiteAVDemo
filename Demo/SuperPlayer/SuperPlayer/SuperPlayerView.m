@@ -1,7 +1,6 @@
 #import "SuperPlayerView.h"
 #import <AVFoundation/AVFoundation.h>
 #import "SuperPlayer.h"
-#import "CFDanmakuView.h"
 #import "SuperPlayerControlViewDelegate.h"
 #import "J2Obj.h"
 #import "SuperPlayerView+Private.h"
@@ -12,6 +11,8 @@
 #import "TXBitrateItemHelper.h"
 #import "UIView+MMLayout.h"
 #import "SPDefaultControlView.h"
+#import "SuperPlayerModelInternal.h"
+#import "TXLiteAVSDK.h"
 
 static UISlider * _volumeSlider;
 
@@ -27,6 +28,7 @@ static UISlider * _volumeSlider;
 @implementation SuperPlayerView {
     UIView *_fullScreenBlackView;
     SuperPlayerControlView *_controlView;
+    NSURLSessionTask *_currentLoadingTask;
 }
 
 
@@ -53,7 +55,7 @@ static UISlider * _volumeSlider;
  *  初始化player
  */
 - (void)initializeThePlayer {
-    
+    LOG_ME;
     self.netWatcher = [[NetWatcher alloc] init];
     
     CGRect frame = CGRectMake(0, -100, 10, 0);
@@ -83,9 +85,12 @@ static UISlider * _volumeSlider;
     [self addNotifications];
     // 添加手势
     [self createGesture];
+    
+    self.autoPlay = YES;
 }
 
 - (void)dealloc {
+    LOG_ME;
     // 移除通知
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [[UIDevice currentDevice] endGeneratingDeviceOrientationNotifications];
@@ -95,39 +100,6 @@ static UISlider * _volumeSlider;
     [self.volumeView removeFromSuperview];
 }
 
-#pragma mark - 弹幕
-
-- (NSTimeInterval)danmakuViewGetPlayTime:(CFDanmakuView *)danmakuView
-{
-    return -[self.reportTime timeIntervalSinceNow];
-}
-
-- (BOOL)danmakuViewIsBuffering:(CFDanmakuView *)danmakuView
-{
-    return self.state != StatePlaying;
-}
-
-- (void)setDanmakuView:(CFDanmakuView *)danmakuView
-{
-    if (_danmakuView) {
-        [_danmakuView removeFromSuperview];
-    }
-    _danmakuView = danmakuView;
-    
-    if (_danmakuView) {
-        _danmakuView.delegate = self;
-        [self addSubview:_danmakuView];
-        
-        [_danmakuView mas_makeConstraints:^(MASConstraintMaker *make) {
-            make.top.equalTo(self);
-            make.bottom.equalTo(self);
-            make.left.equalTo(self);
-            make.right.equalTo(self);
-        }];
-    }
-}
-
-
 #pragma mark - 观察者、通知
 
 /**
@@ -135,9 +107,9 @@ static UISlider * _volumeSlider;
  */
 - (void)addNotifications {
     // app退到后台
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appDidEnterBackground) name:UIApplicationWillResignActiveNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appDidEnterBackground:) name:UIApplicationWillResignActiveNotification object:nil];
     // app进入前台
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appDidEnterPlayground) name:UIApplicationDidBecomeActiveNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appDidEnterPlayground:) name:UIApplicationDidBecomeActiveNotification object:nil];
     
     // 监测设备方向
     [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications];
@@ -168,30 +140,82 @@ static UISlider * _volumeSlider;
 #pragma mark - Public Method
 
 - (void)playWithModel:(SuperPlayerModel *)playerModel {
-    self.imageSprite = nil;
-    self.keyFrameDescList = nil;
+    LOG_ME;
     self.isShiftPlayback = NO;
+    self.imageSprite = nil;
+    self.originalDuration = 0;
     [self reportPlay];
     self.reportTime = [NSDate date];
     [self _removeOldPlayer];
     [self _playWithModel:playerModel];
     self.coverImageView.alpha = 1;
+    self.repeatBtn.hidden = YES;
+    self.repeatBackBtn.hidden = YES;
+}
+
+- (void)reloadModel {
+    SuperPlayerModel *model = _playerModel;
+    if (model) {
+        [self resetPlayer];
+        [self _playWithModel:_playerModel];
+    }
 }
 
 - (void)_playWithModel:(SuperPlayerModel *)playerModel {
+    [_currentLoadingTask cancel];
+    _currentLoadingTask = nil;
+
     _playerModel = playerModel;
-    
+
     [self pause];
     
     NSString *videoURL = playerModel.playingDefinitionUrl;
     if (videoURL != nil) {
         [self configTXPlayer];
-    } else if (playerModel.appId != 0 && playerModel.fileId != nil) {
+    } else if (playerModel.videoId || playerModel.videoIdV2) {
         self.isLive = NO;
-        [self getPlayInfo:playerModel.appId withFileId:playerModel.fileId];
+        __weak __typeof(self) weakSelf = self;
+        _currentLoadingTask = [_playerModel requestWithCompletion:
+                               ^(NSError *error,SuperPlayerModel *model) {
+            if (error) {
+                [weakSelf _onModelLoadFailed:model error:error];
+            } else {
+                weakSelf.imageSprite = model.imageSprite;
+                weakSelf.keyFrameDescList = model.keyFrameDescList;
+                weakSelf.originalDuration = model.originalDuration;
+                [weakSelf _onModelLoadSucceed:model];
+            }
+        }];
+        return;
     } else {
         NSLog(@"无播放地址");
+        return;
     }
+}
+
+- (void)_onModelLoadSucceed:(SuperPlayerModel *)model {
+    if (model == _playerModel) {
+        [self _playWithModel:_playerModel];
+    }
+}
+
+- (void)_onModelLoadFailed:(SuperPlayerModel *)model error:(NSError *)error {
+    if (model != _playerModel) {
+        return;
+    }
+    // error 错误信息
+    [self showMiddleBtnMsg:kStrLoadFaildRetry withAction:ActionRetry];
+    [self.spinner stopAnimating];
+    NSLog(@"Load play model failed. fileID: %@, error: %@",
+          _playerModel.videoId.fileId, error);
+    if ([self.delegate respondsToSelector:@selector(superPlayerError:errCode:errMessage:)]) {
+        NSString *message = [NSString stringWithFormat:@"网络请求失败 %d %@",
+                             (int)error.code, error.localizedDescription];
+        [self.delegate superPlayerError:self
+                                errCode:(int)error.code
+                             errMessage:message];
+    }
+    return;
 }
 
 /**
@@ -218,6 +242,7 @@ static UISlider * _volumeSlider;
  *  重置player
  */
 - (void)resetPlayer {
+    LOG_ME;
     // 移除通知
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     // 暂停
@@ -240,8 +265,10 @@ static UISlider * _volumeSlider;
  *  播放
  */
 - (void)resume {
+    LOG_ME;
     [self.controlView setPlayState:YES];
     self.isPauseByUser = NO;
+    self.state = StatePlaying;
     if (self.isLive) {
         [_livePlayer resume];
     } else {
@@ -253,42 +280,28 @@ static UISlider * _volumeSlider;
  * 暂停
  */
 - (void)pause {
+    LOG_ME;
+    if (!self.isLoaded)
+        return;
     [self.controlView setPlayState:NO];
     self.isPauseByUser = YES;
+    self.state = StatePause;
     if (self.isLive) {
         [_livePlayer pause];
     } else {
         [_vodPlayer pause];
     }
 }
-
-- (TXVodPlayer *)vodPlayer
+#pragma mark - Control View Configuration
+- (void)resetControlViewWithLive:(BOOL)isLive
+                   shiftPlayback:(BOOL)isShiftPlayback
+                       isPlaying:(BOOL)isPlaying
 {
-    if (_vodPlayer == nil) {
-        _vodPlayer = [[TXVodPlayer alloc] init];
-        TXVodPlayConfig *config = [[TXVodPlayConfig alloc] init];
-        config.maxCacheItems = (int)SuperPlayerGlobleConfigShared.maxCacheItem;
-        config.cacheFolderPath = [[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0] stringByAppendingString:@"/TXCache"];
-        config.progressInterval = 0.02;
-//        config.playerType = PLAYER_AVPLAYER;
-        [_vodPlayer setConfig:config];
-        _vodPlayer.vodDelegate = self;
-    }
-    return _vodPlayer;
-}
-
-- (TXLivePlayer *)livePlayer
-{
-    if (_livePlayer == nil) {
-        _livePlayer = [[TXLivePlayer alloc] init];
-        TXLivePlayConfig *config = [[TXLivePlayConfig alloc] init];
-        config.bAutoAdjustCacheTime = NO;
-        config.maxAutoAdjustCacheTime = 5.0f;
-        config.minAutoAdjustCacheTime = 5.0f;
-        [_livePlayer setConfig:config];
-        _livePlayer.delegate = self;
-    }
-    return _livePlayer;
+    [_controlView resetWithResolutionNames:self.playerModel.playDefinitions
+                    currentResolutionIndex:self.playerModel.playingDefinitionIndex
+                                    isLive:isLive
+                            isTimeShifting:isShiftPlayback
+                                 isPlaying:isPlaying];
 }
 
 #pragma mark - Private Method
@@ -296,7 +309,14 @@ static UISlider * _volumeSlider;
  *  设置Player相关参数
  */
 - (void)configTXPlayer {
+    LOG_ME;
     self.backgroundColor = [UIColor blackColor];
+    
+    if (_playerConfig.enableLog) {
+        [TXLiveBase setLogLevel:LOGLEVEL_DEBUG];
+        [TXLiveBase sharedInstance].delegate = self;
+        [TXLiveBase setConsoleEnabled:YES];
+    }
     
     [self.vodPlayer stopPlay];
     [self.vodPlayer removeVideoWidget];
@@ -320,17 +340,69 @@ static UISlider * _volumeSlider;
     NSString *videoURL = self.playerModel.playingDefinitionUrl;
     
     if (self.isLive) {
+        if (!self.livePlayer) {
+            self.livePlayer = [[TXLivePlayer alloc] init];
+            self.livePlayer.delegate = self;
+        }
+        TXLivePlayConfig *config = [[TXLivePlayConfig alloc] init];
+        config.bAutoAdjustCacheTime = NO;
+        config.maxAutoAdjustCacheTime = 5.0f;
+        config.minAutoAdjustCacheTime = 5.0f;
+        config.headers = self.playerConfig.headers;
+        [self.livePlayer setConfig:config];
+        
+        
         self.livePlayer.enableHWAcceleration = self.playerConfig.hwAcceleration;
         [self.livePlayer startPlay:videoURL type:liveType];
         // 时移
         [TXLiveBase setAppID:[NSString stringWithFormat:@"%ld", _playerModel.appId]];
         TXCUrl *curl = [[TXCUrl alloc] initWithString:videoURL];
-        [self.livePlayer prepareLiveSeek:SuperPlayerGlobleConfigShared.playShiftDomain bizId:[curl bizid]];
+        [self.livePlayer prepareLiveSeek:self.playerConfig.playShiftDomain bizId:curl.bizid];
         
         [self.livePlayer setMute:self.playerConfig.mute];
         [self.livePlayer setRenderMode:self.playerConfig.renderMode];
     } else {
+        if (!self.vodPlayer) {
+            self.vodPlayer = [[TXVodPlayer alloc] init];
+            self.vodPlayer.vodDelegate = self;
+        }
+        
+        TXVodPlayConfig *config = [[TXVodPlayConfig alloc] init];
+        config.smoothSwitchBitrate = YES;
+        if (self.playerConfig.maxCacheItem) {
+            // https://github.com/tencentyun/SuperPlayer_iOS/issues/64
+            config.cacheFolderPath = [[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0] stringByAppendingString:@"/TXCache"];
+            config.maxCacheItems = (int)self.playerConfig.maxCacheItem;
+        }
+        config.progressInterval = 0.02;
+        self.vodPlayer.token = self.playerModel.drmToken;
+//        if (_playerModel.videoId.version == FileIdV3) {
+//            if ([_playerModel.drmType isEqualToString:kDrmType_FairPlay]) {
+//                config.certificate = self.playerModel.certificate;
+//                self.vodPlayer.token = self.playerModel.token;
+//                NSLog(@"FairPlay播放");
+//            } else if ([_playerModel.drmType isEqualToString:kDrmType_SimpleAES]) {
+//                self.vodPlayer.token = self.playerModel.token;
+//                NSLog(@"SimpleAES播放");
+//            } else {
+//                // 降级播放
+//                self.vodPlayer.token = nil;
+//            }
+//        } else if (_playerModel.token) {
+//            if (self.playerModel.certificate) {
+//                config.certificate = self.playerModel.certificate;
+//            }
+//            self.vodPlayer.token = self.playerModel.token;
+//        } else {
+//            self.vodPlayer.token = nil;
+//        }
+
+        config.headers = self.playerConfig.headers;
+        
+        [self.vodPlayer setConfig:config];
+        
         self.vodPlayer.enableHWAcceleration = self.playerConfig.hwAcceleration;
+        [self.vodPlayer setStartTime:self.startTime]; self.startTime = 0;
         [self.vodPlayer startPlay:videoURL];
         [self.vodPlayer setBitrateIndex:self.playerModel.playingDefinitionIndex];
         
@@ -338,6 +410,7 @@ static UISlider * _volumeSlider;
         [self.vodPlayer setMirror:self.playerConfig.mirror];
         [self.vodPlayer setMute:self.playerConfig.mute];
         [self.vodPlayer setRenderMode:self.playerConfig.renderMode];
+        [self.vodPlayer setLoop:self.loop];
     }
     [self.netWatcher startWatch];
     __weak SuperPlayerView *weakSelf = self;
@@ -350,10 +423,14 @@ static UISlider * _volumeSlider;
     }];
     self.state = StateBuffering;
     self.isPauseByUser = NO;
-    [self.controlView playerBegin:self.playerModel isLive:self.isLive isTimeShifting:self.isShiftPlayback];
+    [self resetControlViewWithLive:self.isLive
+                     shiftPlayback:self.isShiftPlayback
+                         isPlaying:self.autoPlay];
     self.controlView.playerConfig = self.playerConfig;
     self.repeatBtn.hidden = YES;
+    self.repeatBackBtn.hidden = YES;
     self.playDidEnd = NO;
+    [self.middleBlackBtn fadeOut:0.1];
 }
 
 /**
@@ -401,8 +478,8 @@ static UISlider * _volumeSlider;
  *  设置横屏的约束
  */
 - (void)setOrientationLandscapeConstraint:(UIInterfaceOrientation)orientation {
-    self.isFullScreen = YES;
-    [self toOrientation:orientation];
+    _isFullScreen = YES;
+//    [self _switchToLayoutStyle:orientation];
 }
 
 /**
@@ -411,37 +488,86 @@ static UISlider * _volumeSlider;
 - (void)setOrientationPortraitConstraint {
 
     [self addPlayerToFatherView:self.fatherView];
-    self.isFullScreen = NO;
-    [self toOrientation:UIInterfaceOrientationPortrait];
+    _isFullScreen = NO;
+//    [self _switchToLayoutStyle:UIInterfaceOrientationPortrait];
 }
 
-- (void)toOrientation:(UIInterfaceOrientation)orientation {
+- (UIDeviceOrientation)_orientationForFullScreen:(BOOL)fullScreen {
+    UIDeviceOrientation targetOrientation = [UIDevice currentDevice].orientation;
+    if (fullScreen) {
+        if (!UIDeviceOrientationIsLandscape(targetOrientation)) {
+            targetOrientation = UIDeviceOrientationLandscapeLeft;
+        }
+    } else {
+        if (!UIDeviceOrientationIsPortrait(targetOrientation)) {
+            targetOrientation = UIDeviceOrientationPortrait;
+        }
+    //    targetOrientation = (UIDeviceOrientation)[UIApplication sharedApplication].statusBarOrientation;
+    }
+    return targetOrientation;
+}
+
+- (void)_switchToFullScreen:(BOOL)fullScreen {
+    if (_isFullScreen == fullScreen) {
+        return;
+    }
+    _isFullScreen = fullScreen;
+    [self.fatherView.viewController setNeedsStatusBarAppearanceUpdate];
+
+    UIDeviceOrientation targetOrientation = [self _orientationForFullScreen:fullScreen];// [UIDevice currentDevice].orientation;
+
+    if (fullScreen) {
+        [self removeFromSuperview];
+        [[UIApplication sharedApplication].keyWindow addSubview:_fullScreenBlackView];
+        [_fullScreenBlackView mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.width.equalTo(@(ScreenHeight));
+            make.height.equalTo(@(ScreenWidth));
+            make.center.equalTo([UIApplication sharedApplication].keyWindow);
+        }];
+
+        [[UIApplication sharedApplication].keyWindow addSubview:self];
+        [self mas_remakeConstraints:^(MASConstraintMaker *make) {
+            if (IsIPhoneX) {
+                make.width.equalTo(@(ScreenHeight - self.mm_safeAreaTopGap * 2));
+            } else {
+                make.width.equalTo(@(ScreenHeight));
+            }
+            make.height.equalTo(@(ScreenWidth));
+            make.center.equalTo([UIApplication sharedApplication].keyWindow);
+        }];
+        [self.superview setNeedsLayout];
+    } else {
+        [_fullScreenBlackView removeFromSuperview];
+        [self addPlayerToFatherView:self.fatherView];
+    }
+}
+
+- (void)_switchToLayoutStyle:(SuperPlayerLayoutStyle)style {
     // 获取到当前状态条的方向
-    UIInterfaceOrientation currentOrientation = [UIApplication sharedApplication].statusBarOrientation;
+
+//    UIInterfaceOrientation currentOrientation = [UIDevice currentDevice].orientation;
     // 判断如果当前方向和要旋转的方向一致,那么不做任何操作
-    if (currentOrientation == orientation) { return; }
+//    if (currentOrientation == orientation) { return; }
     
     // 根据要旋转的方向,使用Masonry重新修改限制
-    if (orientation != UIInterfaceOrientationPortrait) {//
+    if (style == SuperPlayerLayoutStyleFullScreen) {//
         // 这个地方加判断是为了从全屏的一侧,直接到全屏的另一侧不用修改限制,否则会出错;
-        if (currentOrientation == UIInterfaceOrientationPortrait) {
+        if (_layoutStyle != SuperPlayerLayoutStyleFullScreen)  { //UIInterfaceOrientationIsPortrait(currentOrientation)) {
             [self removeFromSuperview];
-            if (IsIPhoneX) {
-                [[UIApplication sharedApplication].keyWindow addSubview:_fullScreenBlackView];
-                [_fullScreenBlackView mas_makeConstraints:^(MASConstraintMaker *make) {
-                    make.width.equalTo(@(ScreenHeight));
-                    make.height.equalTo(@(ScreenWidth));
-                    make.center.equalTo([UIApplication sharedApplication].keyWindow);
-                }];
-            }
+            [[UIApplication sharedApplication].keyWindow addSubview:_fullScreenBlackView];
+            [_fullScreenBlackView mas_remakeConstraints:^(MASConstraintMaker *make) {
+                make.width.equalTo(@(ScreenHeight));
+                make.height.equalTo(@(ScreenWidth));
+                make.center.equalTo([UIApplication sharedApplication].keyWindow);
+            }];
+
             [[UIApplication sharedApplication].keyWindow addSubview:self];
             [self mas_remakeConstraints:^(MASConstraintMaker *make) {
                 if (IsIPhoneX) {
-                    make.width.equalTo(@(ScreenHeight-88));
+                    make.width.equalTo(@(ScreenHeight - self.mm_safeAreaTopGap * 2));
                 } else {
                     make.width.equalTo(@(ScreenHeight));
                 }
-
                 make.height.equalTo(@(ScreenWidth));
                 make.center.equalTo([UIApplication sharedApplication].keyWindow);
             }];
@@ -449,34 +575,52 @@ static UISlider * _volumeSlider;
     } else {
         [_fullScreenBlackView removeFromSuperview];
     }
+    self.controlView.compact = style == SuperPlayerLayoutStyleCompact;
+
+    [[UIApplication sharedApplication].keyWindow  layoutIfNeeded];
+
+
     // iOS6.0之后,设置状态条的方法能使用的前提是shouldAutorotate为NO,也就是说这个视图控制器内,旋转要关掉;
     // 也就是说在实现这个方法的时候-(BOOL)shouldAutorotate返回值要为NO
+    /*
     [[UIApplication sharedApplication] setStatusBarOrientation:orientation animated:NO];
-    // 获取旋转状态条需要的时间:
     [UIView beginAnimations:nil context:nil];
     [UIView setAnimationDuration:0.3];
     // 更改了状态条的方向,但是设备方向UIInterfaceOrientation还是正方向的,这就要设置给你播放视频的视图的方向设置旋转
     // 给你的播放视频的view视图设置旋转
     self.transform = CGAffineTransformIdentity;
-    self.transform = [self getTransformRotationAngle];
+    self.transform = [self getTransformRotationAngleOfOrientation:[UIDevice currentDevice].orientation];
     
-    _fullScreenBlackView.transform = self.transform;
+    _fullScreenContainerView.transform = self.transform;
     // 开始旋转
     [UIView commitAnimations];
     
-    if ([self.delegate respondsToSelector:@selector(superPlayerFullScreenChanged:)]) {
-        [self.delegate superPlayerFullScreenChanged:self];
-    }
+    [self.fatherView.mm_viewController setNeedsStatusBarAppearanceUpdate];
+    _layoutStyle = style;
+     */
+}
+
+- (void)_adjustTransform:(UIDeviceOrientation)orientation {
+
+    [UIView beginAnimations:nil context:nil];
+    [UIView setAnimationDuration:0.3];
+
+    self.transform = [self getTransformRotationAngleOfOrientation:orientation];
+    _fullScreenBlackView.transform = self.transform;
+    [UIView commitAnimations];
 }
 
 /**
  * 获取变换的旋转角度
  *
- * @return 角度
+ * @return 变换矩阵
  */
-- (CGAffineTransform)getTransformRotationAngle {
+- (CGAffineTransform)getTransformRotationAngleOfOrientation:(UIDeviceOrientation)orientation {
     // 状态条的方向已经设置过,所以这个就是你想要旋转的方向
-    UIInterfaceOrientation orientation = [UIApplication sharedApplication].statusBarOrientation;
+    UIInterfaceOrientation interfaceOrientation = [UIApplication sharedApplication].statusBarOrientation;
+    if (interfaceOrientation == (UIInterfaceOrientation)orientation) {
+        return CGAffineTransformIdentity;
+    }
     // 根据要进行旋转的方向来计算旋转的角度
     if (orientation == UIInterfaceOrientationPortrait) {
         return CGAffineTransformIdentity;
@@ -505,67 +649,13 @@ static UISlider * _volumeSlider;
     }
 }
 
-/**
- *  屏幕方向发生变化会调用这里
- */
-- (void)onDeviceOrientationChange {
-    if (!self.isLoaded) { return; }
-    if (self.isLockScreen) { return; }
-    if (self.didEnterBackground) { return; };
-    if (SuperPlayerWindowShared.isShowing) { return; }
-    
-    UIDeviceOrientation orientation = [UIDevice currentDevice].orientation;
-    UIInterfaceOrientation interfaceOrientation = (UIInterfaceOrientation)orientation;
-    if (orientation == UIDeviceOrientationFaceUp || orientation == UIDeviceOrientationFaceDown || orientation == UIDeviceOrientationUnknown ) { return; }
-    
-    switch (interfaceOrientation) {
-        case UIInterfaceOrientationPortraitUpsideDown:{
-        }
-            break;
-        case UIInterfaceOrientationPortrait:{
-            if (self.isFullScreen) {
-                self.isFullScreen = NO;
-                [self toOrientation:UIInterfaceOrientationPortrait];
-            }
-        }
-            break;
-        case UIInterfaceOrientationLandscapeLeft:{
-            if (self.isFullScreen == NO) {
-                self.isFullScreen = YES;
-            }
-            [self toOrientation:UIInterfaceOrientationLandscapeLeft];
-        }
-            break;
-        case UIInterfaceOrientationLandscapeRight:{
-            if (self.isFullScreen == NO) {
-                self.isFullScreen = YES;
-            }
-            [self toOrientation:UIInterfaceOrientationLandscapeRight];
-        }
-            break;
-        default:
-            break;
+- (SuperPlayerLayoutStyle)defaultStyleForDeviceOrientation:(UIDeviceOrientation)orientation {
+    if (UIDeviceOrientationIsPortrait(orientation)) {
+        return SuperPlayerLayoutStyleCompact;
+    } else {
+        return SuperPlayerLayoutStyleFullScreen;
     }
 }
-
-// 状态条变化通知（在前台播放才去处理）
-- (void)onStatusBarOrientationChange {
-    if (!self.didEnterBackground) {
-        // 获取到当前状态条的方向
-        UIInterfaceOrientation currentOrientation = [UIApplication sharedApplication].statusBarOrientation;
-        if (currentOrientation == UIInterfaceOrientationPortrait) {
-            [self setOrientationPortraitConstraint];
-        } else {
-            if (currentOrientation == UIInterfaceOrientationLandscapeRight) {
-                [self toOrientation:UIInterfaceOrientationLandscapeRight];
-            } else if (currentOrientation == UIDeviceOrientationLandscapeLeft){
-                [self toOrientation:UIInterfaceOrientationLandscapeLeft];
-            }
-        }
-    }
-}
-
-
 
 #pragma mark - Action
 
@@ -610,8 +700,16 @@ static UISlider * _volumeSlider;
 
 
 /** 全屏 */
-- (void)_fullScreenAction:(BOOL)fullScreen {
-    self.isFullScreen = fullScreen;
+- (void)setFullScreen:(BOOL)fullScreen {
+
+    if (_isFullScreen != fullScreen) {
+        [self _adjustTransform:[self _orientationForFullScreen:fullScreen]];
+        [self _switchToFullScreen:fullScreen];
+        [self _switchToLayoutStyle:fullScreen ? SuperPlayerLayoutStyleFullScreen : SuperPlayerLayoutStyleCompact];
+    }
+    _isFullScreen = fullScreen;
+    /*
+    self.controlView.compact = !_isFullScreen;
     if (fullScreen) {
         UIDeviceOrientation orientation = [UIDevice currentDevice].orientation;
         if (orientation == UIDeviceOrientationLandscapeRight) {
@@ -620,11 +718,11 @@ static UISlider * _volumeSlider;
             [self interfaceOrientation:UIInterfaceOrientationLandscapeRight];
         }
     } else {
+        [self setOrientationPortraitConstraint];
         [self interfaceOrientation:UIInterfaceOrientationPortrait];
     }
+     */
 }
-
-#pragma mark - NSNotification Action
 
 /**
  *  播放完了
@@ -639,40 +737,98 @@ static UISlider * _volumeSlider;
         [self resetPlayer];
     }
     [self.controlView fadeOut:0.2];
+    [self fastViewUnavaliable];
     [self.netWatcher stopWatch];
     self.repeatBtn.hidden = NO;
+    self.repeatBackBtn.hidden = NO;
+    if ([self.delegate respondsToSelector:@selector(superPlayerDidEnd:)]) {
+        [self.delegate superPlayerDidEnd:self];
+    }
 }
+
+#pragma mark - UIKit Notifications
 
 /**
  *  应用退到后台
  */
-- (void)appDidEnterBackground {
+- (void)appDidEnterBackground:(NSNotification *)notify {
     NSLog(@"appDidEnterBackground");
-    self.didEnterBackground     = YES;
-    if (self.state == StatePlaying && !self.isLive) {
+    self.didEnterBackground = YES;
+    if (self.isLive) {
+        return;
+    }
+    if (!self.isPauseByUser && (self.state != StateStopped && self.state != StateFailed)) {
         [_vodPlayer pause];
-        self.state                  = StatePause;
+        self.state = StatePause;
     }
 }
 
 /**
  *  应用进入前台
  */
-- (void)appDidEnterPlayground {
+- (void)appDidEnterPlayground:(NSNotification *)notify {
     NSLog(@"appDidEnterPlayground");
-    self.didEnterBackground     = NO;
-    if (!self.isPauseByUser && self.state == StatePause && !self.isLive) {
-        self.state         = StatePlaying;
-        self.isPauseByUser = NO;
-        [self resume];
+    self.didEnterBackground = NO;
+    if (self.isLive) {
+        return;
+    }
+    if (!self.isPauseByUser && (self.state != StateStopped && self.state != StateFailed)) {
+        self.state = StatePlaying;
+        [_vodPlayer resume];
+    }
+}
+
+// 状态条变化通知（在前台播放才去处理）
+- (void)onStatusBarOrientationChange {
+    [self onDeviceOrientationChange];
+    return;
+    if (!self.didEnterBackground) {
+        UIInterfaceOrientation orientation = (UIInterfaceOrientation)[UIDevice currentDevice].orientation;
+        SuperPlayerLayoutStyle style = [self defaultStyleForDeviceOrientation:orientation];
+//        [[UIApplication sharedApplication] setStatusBarOrientation:orientation animated:NO];
+        if ([UIApplication sharedApplication].statusBarOrientation != orientation) {
+            [self _adjustTransform:(UIInterfaceOrientation)[UIDevice currentDevice].orientation];
+        }
+        [self _switchToFullScreen:style == SuperPlayerLayoutStyleFullScreen];
+        [self _switchToLayoutStyle:style];
+ /*       // 获取到当前状态条的方向
+        UIInterfaceOrientation currentOrientation = [UIApplication sharedApplication].statusBarOrientation;
+        if (currentOrientation == UIInterfaceOrientationPortrait) {
+            [self setOrientationPortraitConstraint];
+        } else {
+            [self _switchToLayoutStyle:style];
+
+            if (currentOrientation == UIInterfaceOrientationLandscapeRight) {
+                [self _switchToLayoutStyle:style];
+            } else if (currentOrientation == UIDeviceOrientationLandscapeLeft){
+                [self _switchToLayoutStyle:UIInterfaceOrientationLandscapeLeft];
+            }
+        }
+   */
     }
 }
 
 /**
- *  从xx秒开始播放视频跳转
- *
- *  @param dragedSeconds 视频跳转的秒数
+ *  屏幕方向发生变化会调用这里
  */
+- (void)onDeviceOrientationChange {
+    if (!self.isLoaded) { return; }
+    if (self.isLockScreen) { return; }
+    if (self.didEnterBackground) { return; };
+    if (SuperPlayerWindowShared.isShowing) { return; }
+    UIDeviceOrientation orientation = [UIDevice currentDevice].orientation;
+    if (orientation == UIDeviceOrientationFaceUp) {
+        return;
+    }
+    SuperPlayerLayoutStyle style = [self defaultStyleForDeviceOrientation:[UIDevice currentDevice].orientation];
+
+    BOOL shouldFullScreen = UIDeviceOrientationIsLandscape(orientation);
+    [self _switchToFullScreen:shouldFullScreen];
+    [self _adjustTransform:[self _orientationForFullScreen:shouldFullScreen]];
+    [self _switchToLayoutStyle:style];
+}
+
+#pragma mark -
 - (void)seekToTime:(NSInteger)dragedSeconds {
     if (!self.isLoaded || self.state == StateStopped) {
         return;
@@ -683,17 +839,22 @@ static UISlider * _volumeSlider;
         if (ret != 0) {
             [self showMiddleBtnMsg:kStrTimeShiftFailed withAction:ActionNone];
             [self.middleBlackBtn fadeOut:2];
-            [self.controlView playerBegin:self.playerModel isLive:self.isLive isTimeShifting:self.isShiftPlayback];
+            [self resetControlViewWithLive:self.isLive
+                             shiftPlayback:self.isShiftPlayback
+                                 isPlaying:YES];
         } else {
+            if (!self.isShiftPlayback)
+                self.isLoaded = NO;
             self.isShiftPlayback = YES;
             self.state = StateBuffering;
-            self.isLoaded = NO;
-            [self.controlView playerBegin:self.playerModel isLive:YES isTimeShifting:self.isShiftPlayback];    //时移播放不能切码率
+            [self resetControlViewWithLive:YES
+                             shiftPlayback:self.isShiftPlayback
+                                 isPlaying:YES]; //时移播放不能切码率
         }
     } else {
-        [self.vodPlayer seek:dragedSeconds];
-        self.seekTime = 0;
         [self.vodPlayer resume];
+        [self.vodPlayer seek:dragedSeconds];
+        [self.controlView setPlayState:YES];
     }
 }
 
@@ -733,6 +894,9 @@ static UISlider * _volumeSlider;
     // 根据上次和本次移动的位置，算出一个速率的point
     CGPoint veloctyPoint = [pan velocityInView:self];
     
+    if (self.state == StateStopped)
+        return;
+    
     // 判断是垂直移动还是水平移动
     switch (pan.state) {
         case UIGestureRecognizerStateBegan:{ // 开始移动
@@ -742,7 +906,7 @@ static UISlider * _volumeSlider;
             if (x > y) { // 水平移动
                 // 取消隐藏
                 self.panDirection = PanDirectionHorizontalMoved;
-                self.sumTime      = [self getCurrentTime];
+                self.sumTime      = [self playCurrentTime];
             }
             else if (x < y){ // 垂直移动
                 self.panDirection = PanDirectionVerticalMoved;
@@ -796,6 +960,12 @@ static UISlider * _volumeSlider;
             self.isDragging = NO;
             break;
         }
+        case UIGestureRecognizerStateCancelled: {
+            self.sumTime = 0;
+            self.isVolume = NO;
+            [self fastViewUnavaliable];
+            self.isDragging = NO;
+        }
         default:
             break;
     }
@@ -824,7 +994,7 @@ static UISlider * _volumeSlider;
  */
 - (void)horizontalMoved:(CGFloat)value {
     // 每次滑动需要叠加时间
-    CGFloat totalMovieDuration = [self getTotalTime];
+    CGFloat totalMovieDuration = [self playDuration];
     self.sumTime += value / 10000 * totalMovieDuration;
     
     if (self.sumTime > totalMovieDuration) { self.sumTime = totalMovieDuration;}
@@ -859,13 +1029,20 @@ static UISlider * _volumeSlider;
 }
 
 - (void)fastViewImageAvaliable:(UIImage *)image progress:(CGFloat)draggedValue {
+    if (self.controlView.isShowSecondView)
+        return;
     [self.fastView showImg:image withProgress:draggedValue];
     [self.fastView fadeShow];
 }
 
 - (void)fastViewProgressAvaliable:(NSInteger)draggedTime
 {
-    NSInteger totalTime = [self getTotalTime];
+    NSInteger totalTime = 0;
+    if (self.originalDuration > 0) {
+        totalTime = self.originalDuration;
+    } else {
+        totalTime = [self playDuration];
+    }
     NSString *currentTimeStr = [StrUtils timeFormat:draggedTime];
     NSString *totalTimeStr   = [StrUtils timeFormat:totalTime];
     NSString *timeStr        = [NSString stringWithFormat:@"%@ / %@", currentTimeStr, totalTimeStr];
@@ -875,7 +1052,7 @@ static UISlider * _volumeSlider;
     
     UIImage *thumbnail;
     if (self.isFullScreen) {
-        thumbnail = [self.imageSprite getThumbnail:self.sumTime];
+        thumbnail = [self.imageSprite getThumbnail:draggedTime];
     }
     if (thumbnail) {
         self.fastView.videoRatio = self.videoRatio;
@@ -929,9 +1106,10 @@ static UISlider * _volumeSlider;
 /**
  *  设置播放的状态
  *
- *  @param state ZFPlayerState
+ *  @param state SuperPlayerState
  */
 - (void)setState:(SuperPlayerState)state {
+        
     _state = state;
     // 控制菊花显示、隐藏
     if (state == StateBuffering) {
@@ -939,13 +1117,14 @@ static UISlider * _volumeSlider;
     } else {
         [self.spinner stopAnimating];
     }
-    if (state == StatePlaying || state == StateBuffering) {
-
+    if (state == StatePlaying) {
+        
         [[NSNotificationCenter defaultCenter] removeObserver:self
                                                         name:@"AVSystemController_SystemVolumeDidChangeNotification"
                                                       object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self
-                                                 selector:@selector(volumeChanged:)         name:@"AVSystemController_SystemVolumeDidChangeNotification"
+                                                 selector:@selector(volumeChanged:)
+                                                     name:@"AVSystemController_SystemVolumeDidChangeNotification"
                                                    object:nil];
         
         if (self.coverImageView.alpha == 1) {
@@ -969,12 +1148,22 @@ static UISlider * _volumeSlider;
 }
 
 - (void)setControlView:(SuperPlayerControlView *)controlView {
+    if (_controlView == controlView) {
+        return;
+    }
+    [_controlView removeFromSuperview];
+
     _controlView = controlView;
     controlView.delegate = self;
     [self addSubview:controlView];
     [controlView mas_makeConstraints:^(MASConstraintMaker *make) {
         make.edges.mas_equalTo(UIEdgeInsetsZero);
     }];
+    [self resetControlViewWithLive:self.isLive
+                     shiftPlayback:self.isShiftPlayback
+                         isPlaying:self.autoPlay];
+    [controlView setTitle:_controlView.title];
+    [controlView setPointArray:_controlView.pointArray];
 }
 
 - (SuperPlayerControlView *)controlView
@@ -1003,17 +1192,24 @@ static UISlider * _volumeSlider;
     }
 }
 
+- (void)setLoop:(BOOL)loop
+{
+    _loop = loop;
+    if (self.vodPlayer) {
+        self.vodPlayer.loop = loop;
+    }
+}
+
 #pragma mark - Getter
 
-- (CGFloat)getTotalTime {
+- (CGFloat)playDuration {
     if (self.isLive) {
         return self.maxLiveProgressTime;
     }
-    
     return self.vodPlayer.duration;
 }
 
-- (CGFloat)getCurrentTime {
+- (CGFloat)playCurrentTime {
     if (self.isLive) {
         if (self.isShiftPlayback) {
             return self.liveProgressTime;
@@ -1021,7 +1217,7 @@ static UISlider * _volumeSlider;
         return self.maxLiveProgressTime;
     }
     
-    return self.vodPlayer.currentPlaybackTime;
+    return _playCurrentTime;
 }
 
 + (UISlider *)volumeViewSlider {
@@ -1042,13 +1238,28 @@ static UISlider * _volumeSlider;
 }
 
 - (void)controlViewBack:(SuperPlayerControlView *)controlView {
+    [self controlViewBackAction:controlView];
+}
+
+- (void)controlViewBackAction:(id)sender {
+    if (self.isFullScreen) {
+        self.isFullScreen = NO;
+        return;
+    }
     if ([self.delegate respondsToSelector:@selector(superPlayerBackAction:)]) {
         [self.delegate superPlayerBackAction:self];
     }
 }
 
 - (void)controlViewChangeScreen:(SuperPlayerControlView *)controlView withFullScreen:(BOOL)isFullScreen {
-    [self _fullScreenAction:isFullScreen];
+    self.isFullScreen = isFullScreen;
+}
+
+- (void)controlViewDidChangeScreen:(UIView *)controlView
+{
+    if ([self.delegate respondsToSelector:@selector(superPlayerFullScreenChanged:)]) {
+        [self.delegate superPlayerFullScreenChanged:self];
+    }
 }
 
 - (void)controlViewLockScreen:(SuperPlayerControlView *)controlView withLock:(BOOL)isLock {
@@ -1065,16 +1276,17 @@ static UISlider * _volumeSlider;
         [self.livePlayer switchStream:url];
         [self showMiddleBtnMsg:[NSString stringWithFormat:@"正在切换到%@...", definition] withAction:ActionNone];
     } else {
-        if ([self.vodPlayer supportedBitrates].count > 0) {
+        if ([self.vodPlayer supportedBitrates].count > 1) {
             [self.vodPlayer setBitrateIndex:self.playerModel.playingDefinitionIndex];
         } else {
-            self.seekTime = [self.vodPlayer currentPlaybackTime];
+            CGFloat startTime = [self.vodPlayer currentPlaybackTime];
+            [self.vodPlayer setStartTime:startTime];
             [self.vodPlayer startPlay:url];
         }
     }
 }
 
-- (void)controlViewConfigUpdate:(SuperPlayerView *)controlView {
+- (void)controlViewConfigUpdate:(SuperPlayerView *)controlView withReload:(BOOL)reload {
     if (self.isLive) {
         [self.livePlayer setMute:self.playerConfig.mute];
         [self.livePlayer setRenderMode:self.playerConfig.renderMode];
@@ -1084,9 +1296,10 @@ static UISlider * _volumeSlider;
         [self.vodPlayer setMute:self.playerConfig.mute];
         [self.vodPlayer setRenderMode:self.playerConfig.renderMode];
     }
-    if (self.playerConfig.hwAccelerationChanged) {
+    if (reload) {
         if (!self.isLive)
-            self.seekTime = [self.vodPlayer currentPlaybackTime];
+            self.startTime = [self.vodPlayer currentPlaybackTime];
+        self.isShiftPlayback = NO;
         [self configTXPlayer]; // 软硬解需要重启
     }
 }
@@ -1097,9 +1310,11 @@ static UISlider * _volumeSlider;
         self.isShiftPlayback = NO;
         self.isLoaded = NO;
         [self.livePlayer resumeLive];
-        [self.controlView playerBegin:self.playerModel isLive:self.isLive isTimeShifting:self.isShiftPlayback];
+        [self resetControlViewWithLive:self.isLive
+                         shiftPlayback:self.isShiftPlayback
+                             isPlaying:YES];
     } else {
-        self.seekTime = [self.vodPlayer currentPlaybackTime];
+        self.startTime = [self.vodPlayer currentPlaybackTime];
         [self configTXPlayer];
     }
 }
@@ -1131,40 +1346,37 @@ static UISlider * _volumeSlider;
     [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"photos-redirect://"]];
 }
 
-- (void)controlViewDanmaku:(SuperPlayerControlView *)controlView withShow:(BOOL)show {
-    if (show) {
-        [_danmakuView start];
-        _danmakuView.hidden = NO;
+- (CGFloat)sliderPosToTime:(CGFloat)pos
+{
+    // 视频总时间长度
+    CGFloat totalTime = 0;
+    if (self.originalDuration > 0) {
+        totalTime = self.originalDuration;
     } else {
-        [_danmakuView pause];
-        _danmakuView.hidden = YES;
+        totalTime = [self playDuration];
     }
-}
 
-- (void)controlViewSeek:(SuperPlayerControlView *)controlView where:(CGFloat)pos {
-    // 视频总时间长度
-    CGFloat total = [self getTotalTime];
-    //计算出拖动的当前秒数
-    NSInteger dragedSeconds = floorf(total * pos);
-    [self seekToTime:dragedSeconds];
-    [self fastViewUnavaliable];
-}
-
-- (void)controlViewPreview:(SuperPlayerControlView *)controlView where:(CGFloat)pos {
-    // 视频总时间长度
-    CGFloat totalTime = [self getTotalTime];
     //计算出拖动的当前秒数
     CGFloat dragedSeconds = floorf(totalTime * pos);
     if (self.isLive && totalTime > MAX_SHIFT_TIME) {
         CGFloat base = totalTime - MAX_SHIFT_TIME;
         dragedSeconds = floor(MAX_SHIFT_TIME * pos) + base;
     }
+    return dragedSeconds;
+}
 
-    if (totalTime > 0) { // 当总时长 > 0时候才能拖动slider
+- (void)controlViewSeek:(SuperPlayerControlView *)controlView where:(CGFloat)pos {
+    CGFloat dragedSeconds = [self sliderPosToTime:pos];
+    [self seekToTime:dragedSeconds];
+    [self fastViewUnavaliable];
+}
+
+- (void)controlViewPreview:(SuperPlayerControlView *)controlView where:(CGFloat)pos {
+    CGFloat dragedSeconds = [self sliderPosToTime:pos];
+    if ([self playDuration] > 0) { // 当总时长 > 0时候才能拖动slider
         [self fastViewProgressAvaliable:dragedSeconds];
     }
 }
-
 
 #pragma clang diagnostic pop
 #pragma mark - 点播回调
@@ -1180,14 +1392,44 @@ static UISlider * _volumeSlider;
             [w removeFromSuperview];
     }
 }
+/*
+- (NSString *)_getResolutionName:(long)minEdge {
+    for (NSInteger i = 0; i < self.resolutions.count; ++ i) {
+        SPResolutionDefination *resDef = self.resolutions[i];
+        if (minEdge <= resDef.minEdge) {
+            return resDef.name;
+        }
+    }
+    return self.resolutions.lastObject.name;
+}
+
+- (NSArray<SuperPlayerUrl *>*)_getHLSDefinations:(NSArray<TXBitrateItem *> *)supportedBitrates {
+    NSMutableArray *definations = [NSMutableArray arrayWithCapacity:3];
+    [supportedBitrates enumerateObjectsUsingBlock:^(TXBitrateItem * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        SuperPlayerUrl *url = [[SuperPlayerUrl alloc] init];
+        url.title = [self _getResolutionName:MIN(obj.width, obj.height)];
+        [definations addObject:url];
+    }];
+    return definations;
+}
+*/
 
 -(void) onPlayEvent:(TXVodPlayer *)player event:(int)EvtID withParam:(NSDictionary*)param
 {
-    NSDictionary* dict = param;
-    
     dispatch_async(dispatch_get_main_queue(), ^{
-        
-        if (EvtID == PLAY_EVT_RCV_FIRST_I_FRAME) {
+        if (EvtID != PLAY_EVT_PLAY_PROGRESS) {
+            NSString *desc = [param description];
+            NSLog(@"%@", [NSString stringWithCString:[desc cStringUsingEncoding:NSUTF8StringEncoding] encoding:NSNonLossyASCIIStringEncoding]);
+        }
+
+        float duration = 0;
+        if (self.originalDuration > 0) {
+            duration = self.originalDuration;
+        } else {
+            duration = player.duration;
+        }
+
+        if (EvtID == PLAY_EVT_PLAY_BEGIN || EvtID == PLAY_EVT_RCV_FIRST_I_FRAME) {
             [self setNeedsLayout];
             [self layoutIfNeeded];
             self.isLoaded = YES;
@@ -1195,46 +1437,88 @@ static UISlider * _volumeSlider;
             [self.vodPlayer setupVideoWidget:self insertIndex:0];
             [self layoutSubviews];  // 防止横屏状态下添加view显示不全
             self.state = StatePlaying;
-            
-            if (self.playerModel.playDefinitions.count == 0) {
+
+//            if (self.playerModel.playDefinitions.count == 0) {
                 [self updateBitrates:player.supportedBitrates];
+//            }
+            for (SPVideoFrameDescription *p in self.keyFrameDescList) {
+                if (player.duration > 0)
+                    p.where = p.time/duration;
             }
-            [self updatePlayerPoint];
+            self.controlView.pointArray = self.keyFrameDescList;
+            
+            // 不使用vodPlayer.autoPlay的原因是暂停的时候会黑屏，影响体验
+            if (!self.autoPlay) {
+                self.autoPlay = YES; // 下次用户设置自动播放失效
+                [self pause];
+            }
+            
+            if (self.originalDuration > 0) {
+                // 当前是试看
+                self.controlView.maxPlayableRatio = player.duration / self.originalDuration;
+            }
         }
         if (EvtID == PLAY_EVT_VOD_PLAY_PREPARED) {
-            if (self.seekTime > 0) {
-                [player seek:self.seekTime];
-                self.seekTime = 0;
+            // 防止暂停导致加载进度不消失
+            if (self.isPauseByUser)
+                [self.spinner stopAnimating];
+            
+            if ([self.delegate respondsToSelector:@selector(superPlayerDidStart:)]) {
+                [self.delegate superPlayerDidStart:self];
             }
         }
-        
-        if (EvtID == PLAY_EVT_PLAY_BEGIN) {
-            if (self.state == StateBuffering)
-                self.state = StatePlaying;
-        } else if (EvtID == PLAY_EVT_PLAY_PROGRESS) {
+        if (EvtID == PLAY_EVT_PLAY_PROGRESS) {
             if (self.state == StateStopped)
                 return;
 
-            NSInteger currentTime = player.currentPlaybackTime;
-            CGFloat totalTime     = player.duration;
-            CGFloat value         = player.currentPlaybackTime / player.duration;
+            self.playCurrentTime  = player.currentPlaybackTime;
+            CGFloat totalTime     = duration;
+            CGFloat value         = player.currentPlaybackTime / duration;
 
-            [self.controlView setProgressTime:currentTime totalTime:totalTime progressValue:value playableValue:player.playableDuration / player.duration];
-
+            [self.controlView setProgressTime:self.playCurrentTime
+                                    totalTime:totalTime
+                                progressValue:value
+                                playableValue:player.playableDuration / duration];
         } else if (EvtID == PLAY_EVT_PLAY_END) {
-            self.state = StateStopped;
+            [self.controlView setProgressTime:[self playDuration]
+                                    totalTime:[self playDuration]
+                                progressValue:player.duration/duration
+                                playableValue:player.duration/duration];
             [self moviePlayDidEnd];
-        } else if (EvtID == PLAY_ERR_NET_DISCONNECT || EvtID == PLAY_ERR_FILE_NOT_FOUND || EvtID == PLAY_ERR_HLS_KEY) {
+        } else if (EvtID == PLAY_ERR_NET_DISCONNECT || EvtID == PLAY_ERR_FILE_NOT_FOUND || EvtID == PLAY_ERR_HLS_KEY /*|| EvtID == PLAY_ERR_VOD_LOAD_LICENSE_FAIL*/) {
+            // DRM视频播放失败自动降级
+//            if ([self.playerModel.drmType isEqualToString:kDrmType_FairPlay]) {
+//                if ([self.playerModel canSetDrmType:kDrmType_SimpleAES]) {
+//                    self.playerModel.drmType = kDrmType_SimpleAES;
+//                    NSLog(@"降级SimpleAES");
+//                } else {
+//                    NSLog(@"降级无加密");
+//                    self.playerModel.drmType = nil;
+//                }
+//                [self configTXPlayer];
+//                return;
+//            } else if ([self.playerModel.drmType isEqualToString:kDrmType_SimpleAES]) {
+//                NSLog(@"降级无加密");
+//                self.playerModel.drmType = nil;
+//                [self configTXPlayer];
+//                return;
+//            }
+            
             if (EvtID == PLAY_ERR_NET_DISCONNECT) {
-                [self showMiddleBtnMsg:kStrBadNetRetry withAction:ActionReplay];
+                [self showMiddleBtnMsg:kStrBadNetRetry withAction:ActionContinueReplay];
             } else {
-                [self showMiddleBtnMsg:kStrLoadFaildRetry withAction:ActionReplay];
+                [self showMiddleBtnMsg:kStrLoadFaildRetry withAction:ActionRetry];
             }
             self.state = StateFailed;
             [player stopPlay];
+            if ([self.delegate respondsToSelector:@selector(superPlayerError:errCode:errMessage:)]) {
+                [self.delegate superPlayerError:self errCode:EvtID errMessage:param[EVT_MSG]];
+            }
         } else if (EvtID == PLAY_EVT_PLAY_LOADING){
             // 当缓冲是空的时候
             self.state = StateBuffering;
+        } else if (EvtID == PLAY_EVT_VOD_LOADING_END) {
+            [self.spinner stopAnimating];
         } else if (EvtID == PLAY_EVT_CHANGE_RESOLUTION) {
             if (player.height != 0) {
                 self.videoRatio = (GLfloat)player.width / player.height;
@@ -1243,62 +1527,78 @@ static UISlider * _volumeSlider;
      });
 }
 
+// 更新当前播放的视频信息，包括清晰度、码率等
 - (void)updateBitrates:(NSArray<TXBitrateItem *> *)bitrates;
 {
     if (bitrates.count > 0) {
-        NSArray *titles = [TXBitrateItemHelper sortWithBitrate:bitrates];
-        _playerModel.multiVideoURLs = titles;
-        self.netWatcher.playerModel = _playerModel;
-        _playerModel.playingDefinition = self.netWatcher.adviseDefinition;
-        [self.controlView playerBegin:_playerModel isLive:self.isLive isTimeShifting:self.isShiftPlayback];
+        if (self.resolutions) {
+            if (_playerModel.multiVideoURLs == nil) {
+                NSMutableArray *urlDefs = [[NSMutableArray alloc] initWithCapacity:self.resolutions.count];
+                for (SPSubStreamInfo *info in self.resolutions) {
+                    SuperPlayerUrl *url = [[SuperPlayerUrl alloc] init];
+                    url.title = info.resolutionName;
+                    [urlDefs addObject:url];
+                }
+                _playerModel.playingDefinition = _playerModel.multiVideoURLs.firstObject.title;
+            }
+        } else {
+            NSArray *titles = [TXBitrateItemHelper sortWithBitrate:bitrates];
+            _playerModel.multiVideoURLs = titles;
+            self.netWatcher.playerModel = _playerModel;
+            if (_playerModel.playingDefinition == nil)
+                _playerModel.playingDefinition = self.netWatcher.adviseDefinition;
+        }
+        [self resetControlViewWithLive:self.isLive
+                         shiftPlayback:self.isShiftPlayback
+                             isPlaying:self.autoPlay];
         [self.vodPlayer setBitrateIndex:_playerModel.playingDefinitionIndex];
+
     }
 }
 
-- (void)updatePlayerPoint {
-    [self.controlView removeAllVideoPoints];
-    
-    for (NSDictionary *keyFrameDesc in self.keyFrameDescList) {
-        NSInteger time = [J2Num([keyFrameDesc valueForKeyPath:@"timeOffset"]) intValue];
-        NSString *content = J2Str([keyFrameDesc valueForKeyPath:@"content"]);
-        [self.controlView addVideoPoint:time/1000.0/([self getTotalTime]+1)
-                                   text:[content stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding]
-                                   time:time];
-    }
-}
+
 #pragma mark - 直播回调
 
 - (void)onPlayEvent:(int)EvtID withParam:(NSDictionary *)param {
     NSDictionary* dict = param;
     
     dispatch_async(dispatch_get_main_queue(), ^{
-
-        if (EvtID == PLAY_EVT_RCV_FIRST_I_FRAME && !self.isLoaded) {
-            [self setNeedsLayout];
-            [self layoutIfNeeded];
-            self.isLoaded = YES;
-            [self _removeOldPlayer];
-            [self.livePlayer setupVideoWidget:CGRectZero containView:self insertIndex:0];
-            [self layoutSubviews];  // 防止横屏状态下添加view显示不全
-            self.state = StatePlaying;
-            [self updatePlayerPoint];
+        if (EvtID != PLAY_EVT_PLAY_PROGRESS) {
+            NSString *desc = [param description];
+            NSLog(@"%@", [NSString stringWithCString:[desc cStringUsingEncoding:NSUTF8StringEncoding] encoding:NSNonLossyASCIIStringEncoding]);
         }
         
-        if (EvtID == PLAY_EVT_PLAY_BEGIN) {
+        if (EvtID == PLAY_EVT_PLAY_BEGIN || EvtID == PLAY_EVT_RCV_FIRST_I_FRAME) {
+            if (!self.isLoaded) {
+                [self setNeedsLayout];
+                [self layoutIfNeeded];
+                self.isLoaded = YES;
+                [self _removeOldPlayer];
+                [self.livePlayer setupVideoWidget:CGRectZero containView:self insertIndex:0];
+                [self layoutSubviews];  // 防止横屏状态下添加view显示不全
+                self.state = StatePlaying;
+                
+                if ([self.delegate respondsToSelector:@selector(superPlayerDidStart:)]) {
+                    [self.delegate superPlayerDidStart:self];
+                }
+            }
+            
             if (self.state == StateBuffering)
                 self.state = StatePlaying;
             [self.netWatcher loadingEndEvent];
         } else if (EvtID == PLAY_EVT_PLAY_END) {
-            self.state = StateStopped;
             [self moviePlayDidEnd];
         } else if (EvtID == PLAY_ERR_NET_DISCONNECT) {
             if (self.isShiftPlayback) {
                 [self controlViewReload:self.controlView];
-                [self showMiddleBtnMsg:kStrTimeShiftFailed withAction:ActionReplay];
+                [self showMiddleBtnMsg:kStrTimeShiftFailed withAction:ActionRetry];
                 [self.middleBlackBtn fadeOut:2];
             } else {
-                [self showMiddleBtnMsg:kStrBadNetRetry withAction:ActionReplay];
+                [self showMiddleBtnMsg:kStrBadNetRetry withAction:ActionRetry];
                 self.state = StateFailed;
+            }
+            if ([self.delegate respondsToSelector:@selector(superPlayerError:errCode:errMessage:)]) {
+                [self.delegate superPlayerError:self errCode:EvtID errMessage:param[EVT_MSG]];
             }
         } else if (EvtID == PLAY_EVT_PLAY_LOADING){
             // 当缓冲是空的时候
@@ -1310,7 +1610,7 @@ static UISlider * _volumeSlider;
             [self showMiddleBtnMsg:[@"已切换为" stringByAppendingString:self.playerModel.playingDefinition] withAction:ActionNone];
             [self.middleBlackBtn fadeOut:1];
         } else if (EvtID == PLAY_ERR_STREAM_SWITCH_FAIL) {
-            [self showMiddleBtnMsg:kStrHDSwitchFailed withAction:ActionReplay];
+            [self showMiddleBtnMsg:kStrHDSwitchFailed withAction:ActionRetry];
             self.state = StateFailed;
         } else if (EvtID == PLAY_EVT_PLAY_PROGRESS) {
             if (self.state == StateStopped)
@@ -1335,120 +1635,21 @@ static UISlider * _volumeSlider;
     });
 }
 
-#pragma mark - Net
-- (void)getPlayInfo:(NSInteger)appid withFileId:(NSString *)fileId {
-    
-    AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
-    NSString *url = [NSString stringWithFormat:@"https://playvideo.qcloud.com/getplayinfo/v2/%ld/%@", appid, fileId];
-    
-    __weak SuperPlayerView *weakSelf = self;
-    SuperPlayerModel *theModel = _playerModel;
-    self.getInfoHttpTask = [manager GET:url parameters:nil progress:nil
-                                success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
-                                    
-                                    __strong SuperPlayerView *strongSelf = weakSelf;
-                                    
-                                    NSString *masterUrl = J2Str([responseObject valueForKeyPath:@"videoInfo.masterPlayList.url"]);
-                                    //    masterUrl = nil;
-                                    if (masterUrl.length > 0) {
-                                        theModel.videoURL = masterUrl;
-                                    } else {
-                                        NSString *mainDefinition = J2Str([responseObject valueForKeyPath:@"playerInfo.defaultVideoClassification"]);
-                                        
-                                        
-                                        NSArray *videoClassification = J2Array([responseObject valueForKeyPath:@"playerInfo.videoClassification"]);
-                                        NSArray *transcodeList = J2Array([responseObject valueForKeyPath:@"videoInfo.transcodeList"]);
-                                        
-                                        NSMutableArray<SuperPlayerUrl *> *result = [NSMutableArray new];
-                                        
-                                        for (NSDictionary *transcode in transcodeList) {
-                                            SuperPlayerUrl *subModel = [SuperPlayerUrl new];
-                                            subModel.url = J2Str(transcode[@"url"]);
-                                            NSNumber *theDefinition = J2Num(transcode[@"definition"]);
-                                            
-                                            
-                                            for (NSDictionary *definition in videoClassification) {
-                                                for (NSObject *definition2 in J2Array([definition valueForKeyPath:@"definitionList"])) {
-                                                    
-                                                    if ([definition2 isEqual:theDefinition]) {
-                                                        subModel.title = J2Str([definition valueForKeyPath:@"name"]);
-                                                        NSString *definitionId = J2Str([definition valueForKeyPath:@"id"]);
-                                                        // 初始播放清晰度
-                                                        if ([definitionId isEqualToString:mainDefinition]) {
-                                                            if (![theModel.videoURL containsString:@".mp4"])
-                                                                theModel.videoURL = subModel.url;
-                                                        }
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                            // 同一个清晰度可能存在多个转码格式，这里只保留一种格式，且优先mp4类型
-                                            for (SuperPlayerUrl *item in result) {
-                                                if ([item.title isEqual:subModel.title]) {
-                                                    if (![item.url containsString:@".mp4"]) {
-                                                        item.url = subModel.url;
-                                                    }
-                                                    subModel = nil;
-                                                    break;
-                                                }
-                                            }
-                                            
-                                            if (subModel) {
-                                                [result addObject:subModel];
-                                            }
-                                        }
-                                        theModel.multiVideoURLs = result;
-                                    }
-                                    if (theModel.videoURL == nil) {
-                                        NSString *source = J2Str([responseObject valueForKeyPath:@"videoInfo.sourceVideo.url"]);
-                                        theModel.videoURL = source;
-                                    }
-                                    
-                                    NSArray *imageSprites = J2Array([responseObject valueForKeyPath:@"imageSpriteInfo.imageSpriteList"]);
-                                    if (imageSprites.count > 0) {
-                                        //                 id imageSpriteObj = imageSprites[0];
-                                        id imageSpriteObj = imageSprites.lastObject;
-                                        NSString *vtt = J2Str([imageSpriteObj valueForKeyPath:@"webVttUrl"]);
-                                        NSArray *imgUrls = J2Array([imageSpriteObj valueForKeyPath:@"imageUrls"]);
-                                        NSMutableArray *imgUrlArray = @[].mutableCopy;
-                                        for (NSString *url in imgUrls) {
-                                            NSURL *nsurl = [NSURL URLWithString:url];
-                                            if (nsurl) {
-                                                [imgUrlArray addObject:nsurl];
-                                            }
-                                        }
-                                        
-                                        TXImageSprite *imageSprite = [[TXImageSprite alloc] init];
-                                        [imageSprite setVTTUrl:[NSURL URLWithString:vtt] imageUrls:imgUrlArray];
-                                        strongSelf.imageSprite = imageSprite;
-                                        
-                                        [DataReport report:@"image_sprite" param:nil];
-                                    }
-                                    
-                                    NSArray *keyFrameDescList = J2Array([responseObject valueForKeyPath:@"keyFrameDescInfo.keyFrameDescList"]);
-                                    if (keyFrameDescList.count > 0) {
-                                        strongSelf.keyFrameDescList = keyFrameDescList;
-                                    } else {
-                                        strongSelf.keyFrameDescList = nil;
-                                    }
-                                    
-                                    [strongSelf _playWithModel:theModel];
-                                    
-                                } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
-                                    // error 错误信息
-                                    [self showMiddleBtnMsg:kStrLoadFaildRetry withAction:ActionIgnore];
-                                }];
-    [manager invalidateSessionCancelingTasks:NO];
+// 日志回调
+-(void) onLog:(NSString*)log LogLevel:(int)level WhichModule:(NSString*)module
+{
+    NSLog(@"%@:%@", module, log);
 }
 
 - (int)livePlayerType {
     int playType = -1;
-    if (self.playerModel.fileId != nil)
-        return -1;
     NSString *videoURL = self.playerModel.playingDefinitionUrl;
-    if ([videoURL hasPrefix:@"rtmp:"]) {
+    NSURLComponents *components = [NSURLComponents componentsWithString:videoURL];
+    NSString *scheme = [[components scheme] lowercaseString];
+    if ([scheme isEqualToString:@"rtmp"]) {
         playType = PLAY_TYPE_LIVE_RTMP;
-    } else if (([videoURL hasPrefix:@"https:"] || [videoURL hasPrefix:@"http:"]) && ([videoURL rangeOfString:@".flv"].length > 0)) {
+    } else if ([scheme hasPrefix:@"http"]
+               && [[components path].lowercaseString hasSuffix:@".flv"]) {
         playType = PLAY_TYPE_LIVE_FLV;
     }
     return playType;
@@ -1461,7 +1662,10 @@ static UISlider * _volumeSlider;
     if (self.isLive) {
         [DataReport report:@"superlive" param:@{@"usedtime":@(usedtime)}];
     } else {
-        [DataReport report:@"supervod" param:@{@"usedtime":@(usedtime), @"fileid":@(self.playerModel.fileId?1:0)}];
+        [DataReport report:@"supervod" param:@{@"usedtime":@(usedtime), @"fileid":@(self.playerModel.videoId.fileId?1:0)}];
+    }
+    if (self.imageSprite) {
+        [DataReport report:@"image_sprite" param:nil];
     }
     self.reportTime = nil;
 }
@@ -1502,11 +1706,22 @@ static UISlider * _volumeSlider;
     switch (self.middleBlackBtnAction) {
         case ActionNone:
             break;
-        case ActionReplay:
+        case ActionContinueReplay: {
+            if (!self.isLive) {
+                self.startTime = self.playCurrentTime;
+            }
             [self configTXPlayer];
+        }
+            break;
+        case ActionRetry:
+            [self reloadModel];
+            break;
         case ActionSwitch:
             [self controlViewSwitch:self.controlView withDefinition:self.netWatcher.adviseDefinition];
-            [self.controlView playerBegin:self.playerModel isLive:self.isLive isTimeShifting:self.isShiftPlayback];
+            [self resetControlViewWithLive:self.isLive
+                             shiftPlayback:self.isShiftPlayback
+                                 isPlaying:YES];
+            break;
         case ActionIgnore:
             return;
         default:
@@ -1526,6 +1741,21 @@ static UISlider * _volumeSlider;
         }];
     }
     return _repeatBtn;
+}
+
+- (UIButton *)repeatBackBtn {
+    if (!_repeatBackBtn) {
+        _repeatBackBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+        [_repeatBackBtn setImage:SuperPlayerImage(@"back_full") forState:UIControlStateNormal];
+        [_repeatBackBtn addTarget:self action:@selector(controlViewBackAction:) forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:_repeatBackBtn];
+        [_repeatBackBtn mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.equalTo(self).offset(15);
+            make.top.equalTo(self).offset(15);
+            make.width.mas_equalTo(@30);
+        }];
+    }
+    return _repeatBackBtn;
 }
 
 - (void)repeatBtnClick:(UIButton *)sender {
@@ -1555,7 +1785,7 @@ static UISlider * _volumeSlider;
         _coverImageView.userInteractionEnabled = YES;
         _coverImageView.contentMode = UIViewContentModeScaleAspectFit;
         _coverImageView.alpha = 0;
-        [self addSubview:_coverImageView];
+        [self insertSubview:_coverImageView belowSubview:self.controlView];
         [_coverImageView mas_makeConstraints:^(MASConstraintMaker *make) {
             make.edges.mas_equalTo(UIEdgeInsetsZero);
         }];

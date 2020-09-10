@@ -63,7 +63,7 @@
     _videoTitleField.textColor = [UIColor whiteColor];
     _videoTitleField.placeholder = @"设置标题...";
 //    _videoTitleField.placeholder = [NSString stringWithFormat:@"当前视频码率：%d",[TXVideoInfoReader getVideoInfo:_videoPath].bitrate];
-    [_videoTitleField setValue:[UIColor grayColor] forKeyPath:@"_placeholderLabel.textColor"];
+    [_videoTitleField setValue:[UIColor grayColor] forKeyPath:@"placeholderLabel.textColor"];
     _videoTitleField.delegate = self;
     _videoTitleField.returnKeyType = UIReturnKeyDone;
     

@@ -85,7 +85,7 @@
 }
 - (void)onDownloadProgress:(TXVodDownloadMediaInfo *)mediaInfo;
 {
-    
+    NSLog(@"进度 %f, 速度 %d", mediaInfo.progress, mediaInfo.speed);
 }
 - (void)onDownloadStop:(TXVodDownloadMediaInfo *)mediaInfo;
 {

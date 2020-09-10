@@ -8,7 +8,18 @@
 
 #import "AppDelegate.h"
 #import <Bugly/Bugly.h>
-#import "TXLiveBase.h"
+
+#ifdef ENABLE_TRTC
+#ifdef ENABLE_PLAY
+#import "TRTCCloud.h"
+#import "TXLiveBase.h"  //TRTC
+#else
+#import "TRTCCloud.h"   //TRTC_Smart
+#endif
+#else
+#import "TXLiveBase.h"  //非TRTC
+#endif
+
 #ifndef UGC_SMART
 #import "AppLogMgr.h"
 #endif
@@ -25,7 +36,7 @@
 #define BUGLY_APP_ID @"18a2342254"
 
 NSString *helpUrlDb[] = {
-    [Help_美女直播] = @"https://cloud.tencent.com/document/product/454/14606",
+    [Help_MLVBLiveRoom] = @"https://cloud.tencent.com/document/product/454/14606",
         [Help_录屏直播 ] = @"https://cloud.tencent.com/document/product/454/7883",
         [Help_超级播放器] = @"https://cloud.tencent.com/document/product/454/18871",
         [Help_视频录制] = @"https://cloud.tencent.com/document/product/584/9367",
@@ -39,12 +50,17 @@ NSString *helpUrlDb[] = {
         [Help_直播播放器] = @"https://cloud.tencent.com/document/product/454/7880",
     [Help_点播播放器] = @"https://cloud.tencent.com/document/product/454/12147",
     [Help_webrtc] = @"https://cloud.tencent.com/document/product/454/16914",
+    [Help_TRTC] = @"https://cloud.tencent.com/document/product/647/32221",
     };
     
 @interface AppDelegate () <UNUserNotificationCenterDelegate>
 
 @end
-
+//@implementation NSObject (Shit)
+//- (void)ac_dealloc {
+//
+//}
+//@end
 @implementation AppDelegate
 
 - (void)clickHelp:(UIButton *)sender {
@@ -56,22 +72,41 @@ NSString *helpUrlDb[] = {
 }
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"remove_cache_preference"]) {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *documentPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+        [fm removeItemAtPath:[documentPath stringByAppendingPathComponent:@"TXUgcSDK.licence"] error:nil];
+        [fm removeItemAtPath:[documentPath stringByAppendingPathComponent:@"TXLiveSDK.licence"] error:nil];
+        [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"remove_cache_preference"];
+    }
     //启动bugly组件，bugly组件为腾讯提供的用于crash上报和分析的开放组件，如果您不需要该组件，可以自行移除
     BuglyConfig * config = [[BuglyConfig alloc] init];
-    config.version = [TXLiveBase getSDKVersionStr];
+    NSString *version = nil;
+#if ENABLE_TRTC
+    version = [TRTCCloud getSDKVersion];
+    
+#else
+    version = [TXLiveBase getSDKVersionStr];
+#endif
+    
 #if DEBUG
     config.debugMode = YES;
 #endif
-
+    config.version = version;
     config.channel = @"LiteAV Demo";
     
     [Bugly startWithAppId:BUGLY_APP_ID config:config];
 #ifdef ENABLE_UGC
-    [TXUGCBase setLicenceURL:@"http://ugc-licence-test-1252463788.file.myqcloud.com/RDM_Enterprise.licence" key:@"9bc74ac7bfd07ea392e8fdff2ba5678a"];
-//    [TXUGCBase setLicenceURL:@"https://xiaoshipin-1251610319.cos.ap-chengdu.myqcloud.com/enterprisepro.license" key:@"9bc74ac7bfd07ea392e8fdff2ba5678a"];
+    [TXUGCBase setLicenceURL:@"" key:@""];
 #endif
-
+    
+#ifdef ENABLE_PUSH
+    [TXLiveBase setLicenceURL:@"" key:@""];
+    
+    NSLog(@"TXLiveBaseVersion = %@",[TXLiveBase getSDKVersionStr]);
+    
+#endif
+    
     NSLog(@"rtmp demo init crash report");
 
     // Override point for customization after application launch.
@@ -79,13 +114,18 @@ NSString *helpUrlDb[] = {
     
     self.window.backgroundColor = [UIColor whiteColor];
     
+#ifdef ENABLE_TRTC
+    [TRTCCloud setConsoleEnabled:NO];
+    [TRTCCloud setLogLevel:TRTCLogLevelDebug];
+    [TRTCCloud setLogDelegate:[AppLogMgr shareInstance]];
+#else
     //初始化log模块
 #ifndef UGC_SMART
     [TXLiveBase sharedInstance].delegate = [AppLogMgr shareInstance];
     [TXLiveBase setConsoleEnabled:NO];
     [TXLiveBase setAppID:@"1252463788"];
 #endif
-    
+#endif
     MainViewController* vc = [[MainViewController alloc] init];
     
     [[UIBarButtonItem appearance] setBackButtonTitlePositionAdjustment:UIOffsetMake(-1000, 0)
@@ -99,16 +139,14 @@ NSString *helpUrlDb[] = {
     [[UINavigationBar appearance] setShadowImage:[UIImage new]];
 
     UINavigationController* nc = [[UINavigationController alloc] initWithRootViewController:vc];
-
-    
     nc.navigationBar.hidden = YES;
     
     self.window.rootViewController = nc;
     
     [self.window makeKeyAndVisible];
-    
+#ifndef ENABLE_TRTC
     [[AFNetworkReachabilityManager sharedManager] startMonitoring];
-    
+#endif
     //For ReplayKit2. 使用 UNUserNotificationCenter 来管理通知
     if ([UIDevice currentDevice].systemVersion.floatValue >= 11.0) {
         UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];

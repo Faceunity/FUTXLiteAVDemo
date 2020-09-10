@@ -32,7 +32,7 @@
 @class QCloudCOSXMLService;
 @class QCloudCOSXMLUploadObjectRequest;
 @class QCloudCOSXMLCopyObjectRequest;
-
+@class QCloudCOSXMLDownloadObjectRequest;
 @interface QCloudCOSTransferMangerService : QCloudService
 
 
@@ -41,8 +41,8 @@
 
 
 #pragma hidden super selectors
-- (int) performRequest:(QCloudBizHTTPRequest *)httpRequst NS_UNAVAILABLE;
-- (int) performRequest:(QCloudBizHTTPRequest *)httpRequst withFinishBlock:(QCloudRequestFinishBlock)block NS_UNAVAILABLE;
+- (int) performRequest:(QCloudBizHTTPRequest *)httpRequst isHaveBody:(BOOL)body NS_UNAVAILABLE;
+- (int) performRequest:(QCloudBizHTTPRequest *)httpRequst isHaveBody:(BOOL)body withFinishBlock:(QCloudRequestFinishBlock)block NS_UNAVAILABLE;
 
 #pragma Factory
 + (QCloudCOSTransferMangerService*) defaultCOSTransferManager;
@@ -52,4 +52,5 @@
 
 - (void) UploadObject:(QCloudCOSXMLUploadObjectRequest*)upload;
 - (void) CopyObject:(QCloudCOSXMLCopyObjectRequest*)copy;
+- (void) DownloadObject: (QCloudCOSXMLDownloadObjectRequest*)get;
 @end

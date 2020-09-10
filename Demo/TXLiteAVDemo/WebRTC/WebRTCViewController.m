@@ -47,6 +47,7 @@
     _userListArray = [[NSMutableArray alloc] init];
     
     _sdkappid = 1400037025;
+    _env_flag = 0;
     
     [self initUI];
 }
@@ -84,7 +85,7 @@
     
     
     CGSize size = [[UIScreen mainScreen] bounds].size;
-    int ICON_SIZE = size.width / 10;
+    int ICON_SIZE = 46;
     
     CGFloat topBase = [UIApplication sharedApplication].statusBarFrame.size.height + self.navigationController.navigationBar.height;
     topBase += 3;
@@ -116,7 +117,7 @@
     
     float startSpace = 30;
     float centerInterVal = (size.width - 2 * startSpace - ICON_SIZE) / 4;
-    float iconY = size.height - ICON_SIZE / 2 - 10;
+    float iconY = size.height - ICON_SIZE / 2 - 5;
     if (@available(iOS 11, *)) {
         iconY -= [UIApplication sharedApplication].keyWindow.safeAreaInsets.bottom;
     }
@@ -166,17 +167,17 @@
     _logView.hidden = YES;
     [self.view addSubview:_logView];
     
-    // 正式环境 or 测试环境
-    _env_switch = YES;
+    _env_flag = 0;  //默认云上正式环境
     _btnEnv = [UIButton buttonWithType:UIButtonTypeCustom];
     _btnEnv.center = CGPointMake(startSpace + ICON_SIZE/2 + centerInterVal * 4, iconY);
     _btnEnv.bounds = CGRectMake(0, 0, ICON_SIZE, ICON_SIZE);
-    [_btnEnv setTitle:@"正式" forState:UIControlStateNormal];
-    _btnEnv.titleLabel.font = [UIFont systemFontOfSize:15];
-    [_btnEnv setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
-    [_btnEnv setBackgroundColor:[UIColor whiteColor]];
-    _btnEnv.layer.cornerRadius = _btnEnv.frame.size.width / 2;
-    [_btnEnv setAlpha:0.5];
+//    [_btnEnv setTitle:@"正式" forState:UIControlStateNormal];
+//    _btnEnv.titleLabel.font = [UIFont systemFontOfSize:15];
+//    [_btnEnv setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+//    [_btnEnv setBackgroundColor:[UIColor whiteColor]];
+//    _btnEnv.layer.cornerRadius = _btnEnv.frame.size.width / 2;
+//    [_btnEnv setAlpha:0.5];
+    [_btnEnv setImage:[UIImage imageNamed:@"release-env"] forState:UIControlStateNormal];
     [_btnEnv addTarget:self action:@selector(clickEnv:) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:_btnEnv];
     
@@ -361,7 +362,7 @@
         _pwd = _txtUserPwd.text;
         
         // 获取进房所需要的签名，拼成推流地址
-        [self getRoomSig:^(NSString *roomSig) {
+        [WebRTCViewController getRoomSig:0 sdkAppId:_sdkappid roomId:_roomID userId:_userID completion:^(NSString *roomSig) {
             if (roomSig) {
                 // 注意roomSig是一个json串，里面有空格，需要先url编码
                 NSString *strUrl = [NSString stringWithFormat:@"room://cloud.tencent.com?sdkappid=%u&roomid=%u&userid=%@&roomsig=%@",
@@ -403,12 +404,27 @@
 
 // 切换正式环境和测试环境
 - (void)clickEnv:(UIButton *)btn {
-    if (_env_switch) {
-        [btn setTitle:@"测试" forState:UIControlStateNormal];
-    } else {
-        [btn setTitle:@"正式" forState:UIControlStateNormal];
+
+    NSString * imageName = @"release-env";
+    _env_flag = (_env_flag + 1) % 4;
+    switch (_env_flag) {
+        case 0:
+            imageName = @"release-env";
+            break;
+        case 1:
+            imageName = @"test-env";
+            break;
+        case 2:
+            imageName = @"tim-yun";
+            break;
+        case 3:
+            imageName = @"tim-test";
+            break;
+        default:
+            break;
     }
-    _env_switch = !_env_switch;
+    
+    [btn setImage:[UIImage imageNamed: imageName] forState:UIControlStateNormal];
 }
 
 // 设置log显示
@@ -581,7 +597,32 @@
 
 // 房间列表下发
 // 注意服务器下发的列表中不包含自己
-// {"userlist":[{"userid":"webrtc11","playurl":"room://183.3.225.15:1935/webrtc/1400037025_107688_webrtc11"},{"userid":"webrtc12","playurl":"room://183.3.225.15:1935/webrtc/1400037025_107688_webrtc12"}]}
+/*
+ userlist是主流用户列表（兼容旧版本，就叫这个名字），userlist_aux是辅流用户列表
+ 
+ {
+     "userlist":[
+         {
+             "userid":"webrtc11",
+             "playurl":"room://183.3.225.15:1935/webrtc/1400037025_107688_webrtc11_main"
+         },
+         {
+             "userid":"webrtc12",
+             "playurl":"room://183.3.225.15:1935/webrtc/1400037025_107688_webrtc12_main"
+         }
+     ],
+     "userlist_aux":[
+         {
+             "userid":"webrtc11",
+             "playurl":"room://183.3.225.15:1935/webrtc/1400037025_107688_webrtc11_aux"
+         },
+         {
+             "userid":"webrtc12",
+             "playurl":"room://183.3.225.15:1935/webrtc/1400037025_107688_webrtc12_aux"
+         }
+     ],
+ }
+ */
 - (void)onWebRTCUserListPush:(NSString *)msg {
     if (!msg) {
         return;
@@ -597,16 +638,26 @@
         return;
     }
     NSArray *userList = jsonDic[@"userlist"];
-    if (userList == nil) {
+    NSArray *userListAux = jsonDic[@"userlist_aux"];
+    
+    if (userList == nil && userListAux == nil) {
         return;
     }
-    
+   
     // 判断哪些人是进房或者退房, userlist为空表示房间里只有自己了
     NSMutableArray *oldUserListArray = _userListArray;
     NSMutableArray *newUserListArray = [[NSMutableArray alloc] init];
+    
+    // 主流
     for (id dic in userList) {
         [newUserListArray addObject:dic[@"userid"]];
     }
+    // 辅流
+    for (id dic in userListAux) {
+        [newUserListArray addObject:[NSString stringWithFormat:@"%@_aux", dic[@"userid"]]];
+    }
+    
+    userList = [userList arrayByAddingObjectsFromArray:userListAux];
     
     NSMutableSet *leaveSet = [[NSMutableSet alloc] init];
     for (id userid in oldUserListArray) {
@@ -699,18 +750,19 @@
 
 // 登录客户自己的服务器，拿到userSig和privMapEncrypt，用于获取roomSig
 typedef void (^ILoginAppCompletion)(NSString *userSig, NSString *privMapEncrypt);
-- (void)loginAppServer:(NSString *)userID pwd:(NSString *)pwd roomID:(uint32_t)roomID sdkappid:(uint32_t)sdkappid withCompletion:(ILoginAppCompletion)completion {
++ (void)loginAppServer:(NSString *)userID pwd:(NSString *)pwd roomID:(uint32_t)roomID sdkappid:(uint32_t)sdkappid withCompletion:(ILoginAppCompletion)completion {
     NSDictionary *reqParam = @{@"identifier": userID, @"pwd": pwd, @"appid": @(sdkappid), @"roomnum": @(roomID), @"privMap": @(255)};
     NSString *reqUrl = @"https://sxb.qcloud.com/sxb_dev/?svc=account&cmd=authPrivMap";
     
-    [self POST:reqUrl parameters:reqParam retryCount:0 retryLimit:5 progress:nil success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
+    [WebRTCViewController POST:reqUrl parameters:reqParam retryCount:0 retryLimit:5 progress:nil success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
         dispatch_async(dispatch_get_main_queue(), ^{
             id data = responseObject[@"data"];
             id userSig = data[@"userSig"];
             id privMapEncrypt = data[@"privMapEncrypt"];
             NSLog(@"loginAppServer:[%@]", responseObject);
             if (userSig == nil || privMapEncrypt == nil) {
-                [self appendLog:[NSString stringWithFormat:@"loginAppServer:[%@]", [responseObject description]]];
+                // [self appendLog:[NSString stringWithFormat:@"loginAppServer:[%@]", [responseObject description]]];
+                NSLog(@"%@", [NSString stringWithFormat:@"loginAppServer:[%@]", [responseObject description]]);
             }
             
             if (completion) {
@@ -728,29 +780,46 @@ typedef void (^ILoginAppCompletion)(NSString *userSig, NSString *privMapEncrypt)
 
 // 请求腾讯云签名服务器，拿到roomSig，用来进入WebRTC房间
 typedef void (^IRequestSigCompletion)(NSString *roomSig);
-- (void)requestSigServer:(NSString *)userID userSig:(NSString *)userSig privMapEncrypt:(NSString *)privMapEncrypt roomID:(uint32_t)roomID sdkappid:(uint32_t)sdkappid withCompletion:(IRequestSigCompletion)completion {
++ (void)requestSigServer:(int)env userID:(NSString *)userID userSig:(NSString *)userSig privMapEncrypt:(NSString *)privMapEncrypt roomID:(uint32_t)roomID sdkappid:(uint32_t)sdkappid withCompletion:(IRequestSigCompletion)completion {
     NSDictionary *reqHead = @{@"Cmd": @(1), @"SeqNo": @(1), @"BusType": @(7), @"GroupId": @(roomID)};
     NSDictionary *reqBody = @{@"PrivMapEncrypt": privMapEncrypt, @"TerminalType": @(1), @"FromType": @(3), @"SdkVersion": @(26280566)};
     
     NSDictionary *reqParam = @{@"ReqHead": reqHead, @"ReqBody": reqBody};
     
     NSString *reqUrl = nil;
-    if (_env_switch) {
-        // 正式环境
-        reqUrl = [NSString stringWithFormat:@"https://official.opensso.tencent-cloud.com/v4/openim/jsonvideoapp?sdkappid=%u&identifier=%@&usersig=%@&random=9999&contenttype=json", sdkappid, userID, userSig];
-    } else {
-        // 测试环境
-        reqUrl = [NSString stringWithFormat:@"https://test.opensso.tencent-cloud.com/v4/openim/jsonvideoapp?sdkappid=%u&identifier=%@&usersig=%@&random=9999&contenttype=json", sdkappid, userID, userSig];
+    switch (env) {
+        case 0:     // 云上正式环境
+            reqUrl = [NSString stringWithFormat:@"https://official.opensso.tencent-cloud.com/v4/openim/jsonvideoapp?sdkappid=%u&identifier=%@&usersig=%@&random=9999&contenttype=json", sdkappid, userID, userSig];
+            break;
+            
+        case 1:     // 云上测试环境
+            reqUrl = [NSString stringWithFormat:@"https://test.opensso.tencent-cloud.com/v4/openim/jsonvideoapp?sdkappid=%u&identifier=%@&usersig=%@&random=9999&contenttype=json", sdkappid, userID, userSig];
+            break;
+            
+        case 2:     // 自研正式环境
+            reqUrl = [NSString stringWithFormat:@"https://yun.tim.qq.com/v4/openim/jsonvideoapp?sdkappid=%u&identifier=%@&usersig=%@&random=9999&contenttype=json", sdkappid, userID, userSig];
+            break;
+            
+        case 3:     // 自研测试环境
+            reqUrl = [NSString stringWithFormat:@"https://test.tim.qq.com/v4/openim/jsonvideoapp?sdkappid=%u&identifier=%@&usersig=%@&random=9999&contenttype=json", sdkappid, userID, userSig];
+            break;
+            
+        default:
+            break;
     }
     
-    [self POST:reqUrl parameters:reqParam retryCount:0 retryLimit:5 progress:nil success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
+    
+//    reqUrl = [NSString stringWithFormat:@"https://test.tim.qq.com/v4/openim/jsonvideoapp?sdkappid=%u&identifier=%@&usersig=%@&random=9999&contenttype=json", sdkappid, userID, userSig];
+    
+    [WebRTCViewController POST:reqUrl parameters:reqParam retryCount:0 retryLimit:5 progress:nil success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
         dispatch_async(dispatch_get_main_queue(), ^{
             id rspHead = responseObject[@"RspHead"];
             id rspBody = responseObject[@"RspBody"];
             NSLog(@"requestSigServer:[%@]", responseObject);
             
             if ([rspHead[@"ErrorCode"] integerValue] != 0) {
-                [self appendLog:[NSString stringWithFormat:@"requestSigServer:[%@]", [responseObject description]]];
+                // [self appendLog:[NSString stringWithFormat:@"requestSigServer:[%@]", [responseObject description]]];
+                NSLog(@"%@", [NSString stringWithFormat:@"requestSigServer:[%@]", [responseObject description]]);
                 
                 // 有错误就返回nil
                 if (completion) {
@@ -783,9 +852,14 @@ typedef void (^IRequestSigCompletion)(NSString *roomSig);
 // 获取进房签名
 typedef void (^IGetRoomSigCompletion)(NSString *roomSig);
 - (void)getRoomSig:(IGetRoomSigCompletion)completion {
-    [self loginAppServer:_userID pwd:_pwd roomID: _roomID sdkappid:_sdkappid withCompletion:^(NSString *userSig, NSString *privMapEncrypt) {
+
+}
+
++ (void)getRoomSig:(int)env sdkAppId:(UInt32)sdkAppId roomId:(UInt32)roomId userId:(NSString *)userId
+completion:(void(^)(NSString *roomSig))completion {
+    [WebRTCViewController loginAppServer:userId pwd:@"pwd" roomID: roomId sdkappid:sdkAppId withCompletion:^(NSString *userSig, NSString *privMapEncrypt) {
         if (userSig && privMapEncrypt) {
-            [self requestSigServer:_userID userSig:userSig privMapEncrypt:privMapEncrypt roomID:_roomID sdkappid:_sdkappid withCompletion:^(NSString *roomSig) {
+            [WebRTCViewController requestSigServer:env userID:userId userSig:userSig privMapEncrypt:privMapEncrypt roomID:roomId sdkappid:sdkAppId withCompletion:^(NSString *roomSig) {
                 if (completion) {
                     completion(roomSig);
                 }
@@ -797,7 +871,7 @@ typedef void (^IGetRoomSigCompletion)(NSString *roomSig);
 }
 
 // 网络请求包装，每次请求重试若干次
-- (void)POST:(NSString *)URLString
++ (void)POST:(NSString *)URLString
                 parameters:(id)parameters
                  retryCount:(NSInteger)retryCount
                  retryLimit:(NSInteger)retryLimit
@@ -822,8 +896,8 @@ typedef void (^IGetRoomSigCompletion)(NSString *roomSig);
         if (retryCount < retryLimit) {
             // 1秒后重试
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [self appendLog:@"https request retry"];
-                [self POST:URLString parameters:parameters retryCount:retryCount+1 retryLimit:retryLimit progress:uploadProgress success:success failure:failure];
+                NSLog(@"https request retry");
+                [WebRTCViewController POST:URLString parameters:parameters retryCount:retryCount+1 retryLimit:retryLimit progress:uploadProgress success:success failure:failure];
             });
         } else {
             dispatch_async(dispatch_get_main_queue(), ^{

@@ -1,18 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Bucket
-   uuid = "E8FDACAE-AA67-4011-812C-63B220AC40F8"
+   uuid = "6A09248A-F0B4-409C-9B76-46A05E0E33B3"
    type = "1"
    version = "2.0">
    <Breakpoints>
       <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.RuntimeIssueBreakpoint">
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "62FB5999-7AAE-44A3-A446-3705A11A4A7A"
+            uuid = "BF140154-66D3-49B6-A0CB-A2365B50F2A9"
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            breakpointStackSelectionBehavior = "1"
-            type = "4">
+            filePath = "TXLiteAVDemo/TRTC/Settings/SDKManager/Feature/TRTCCloudManager.m"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "606"
+            endingLineNumber = "606"
+            landmarkName = "-startLocalVideo"
+            landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

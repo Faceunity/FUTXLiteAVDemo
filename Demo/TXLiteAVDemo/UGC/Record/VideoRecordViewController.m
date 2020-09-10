@@ -10,6 +10,7 @@
 #import "VideoRecordProcessView.h"
 #import "MBProgressHUD.h"
 #import "SmallButton.h"
+#import "RecordSideButtonGroup.h"
 
 #ifndef UGC_SMART
 #import "VideoRecordMusicView.h"
@@ -55,12 +56,7 @@ TXUGCRecordListener
     BOOL                            _videoRecording;
     BOOL                            _isPaused;
     BOOL                            _isFlash;
-    
-    UIButton *                      _btnRatio;
-    UIButton *                      _btnRatio43;
-    UIButton *                      _btnRatio11;
-    UIButton *                      _btnRatio169;
-    CGRect                          _btnRatioFrame;
+    RecordSideButtonGroup          *_btnRatioGroup;
     UIView *                        _bottomMask;
     UIView *                        _videoRecordView;
     UIButton *                      _btnDelete;
@@ -93,7 +89,7 @@ TXUGCRecordListener
     VideoRecordMusicView *          _musicView;
     SpeedMode                       _speedMode;
 #endif
-    VideoRecordConfig*                 _videoConfig;
+    VideoRecordConfig*              _videoConfig;
     TXVideoAspectRatio              _aspectRatio;
     BOOL                            _isBackDelete;
     BOOL                            _bgmRecording;
@@ -128,14 +124,11 @@ TXUGCRecordListener
         _zoom        = 1.0;
         _bgmBeginTime = 0;
         _currentRecordTime = 0;
-        _appForeground = YES;
-        
+
 #ifndef UGC_SMART
        _speedMode = SpeedMode_Standard;
 #endif
-        
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAppDidEnterBackGround:) name:UIApplicationDidEnterBackgroundNotification object:nil];
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAppWillEnterForeground:) name:UIApplicationWillEnterForegroundNotification object:nil];
+        _aspectRatio = configure.videoRatio;
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAppDidBecomeActive:) name:UIApplicationDidBecomeActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAppWillResignActive:) name:UIApplicationWillResignActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self
@@ -210,43 +203,17 @@ TXUGCRecordListener
     if (type == AVAudioSessionInterruptionTypeBegan) {
         // 在10.3及以上的系统上，分享跳其它app后再回来会收到AVAudioSessionInterruptionWasSuspendedKey的通知，不处理这个事件。
         if ([info objectForKey:@"AVAudioSessionInterruptionWasSuspendedKey"]) {
-            
-            
             return;
         }
-        _appForeground = NO;
         if (!_isPaused && _videoRecording)
             [self onBtnRecordStartClicked];
-        
-    }else{
-        AVAudioSessionInterruptionOptions options = [info[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
-        if (options == AVAudioSessionInterruptionOptionShouldResume) {
-            _appForeground = YES;
-        }
     }
-}
-
-- (void)onAppDidEnterBackGround:(UIApplication*)app
-{
-    _appForeground = NO;
-    if (!_isPaused && _videoRecording){
-        [self onBtnRecordStartClicked];
-    }
-    
-    if (!_vBeauty.hidden) {
-        [self onBtnBeautyClicked];
-    }
-}
-
-- (void)onAppWillEnterForeground:(UIApplication*)app
-{
-    _appForeground = YES;
-    
 }
 
 - (void)onAppWillResignActive:(UIApplication*)app
 {
-    _appForeground = NO;
+    [[[TXUGCRecord shareInstance] getBeautyManager] setMotionMute:YES];
+
     if (!_isPaused && _videoRecording)
         [self onBtnRecordStartClicked];
     
@@ -255,10 +222,11 @@ TXUGCRecordListener
     }
     
 }
+
 - (void)onAppDidBecomeActive:(UIApplication*)app
 {
     _appForeground = YES;
-    
+    [[[TXUGCRecord shareInstance] getBeautyManager] setMotionMute:NO];
 }
 
 #pragma mark ---- Common UI ----
@@ -280,52 +248,50 @@ TXUGCRecordListener
     [btnPop setImage:[UIImage imageNamed:@"back"] forState:UIControlStateNormal];
     [btnPop addTarget:self action:@selector(onBtnPopClicked) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:btnPop];
-    
-    _btnRatio169 = [SmallButton buttonWithType:UIButtonTypeCustom];
-    _btnRatio169.bounds = CGRectMake(0, 0, BUTTON_CONTROL_SIZE, BUTTON_CONTROL_SIZE);
-    _btnRatio169.center = CGPointMake(CGRectGetWidth(self.view.bounds) - 20 - BUTTON_CONTROL_SIZE / 2, centerY);
-    [_btnRatio169 setImage:[UIImage imageNamed:@"169"] forState:UIControlStateNormal];
-    [_btnRatio169 setImage:[UIImage imageNamed:@"169_hover"] forState:UIControlStateHighlighted];
-    [_btnRatio169 addTarget:self action:@selector(onBtnRatioClicked:) forControlEvents:UIControlEventTouchUpInside];
-    _btnRatio169.tag = VIDEO_ASPECT_RATIO_9_16;
-    _btnRatio169.hidden = NO;
-    [self.view addSubview:_btnRatio169];
-    _btnRatioFrame = _btnRatio169.frame;
-    
-    _btnRatio11 = [SmallButton buttonWithType:UIButtonTypeCustom];
-    _btnRatio11.frame = CGRectOffset(_btnRatioFrame, -(30 + BUTTON_CONTROL_SIZE), 0);
-    [_btnRatio11 setImage:[UIImage imageNamed:@"11"] forState:UIControlStateNormal];
-    [_btnRatio11 setImage:[UIImage imageNamed:@"11_hover"] forState:UIControlStateHighlighted];
-    [_btnRatio11 addTarget:self action:@selector(onBtnRatioClicked:) forControlEvents:UIControlEventTouchUpInside];
-    _btnRatio11.tag = VIDEO_ASPECT_RATIO_1_1;
-    _btnRatio11.hidden = YES;
-    [self.view addSubview:_btnRatio11];
-    
-    _btnRatio43 = [SmallButton buttonWithType:UIButtonTypeCustom];
-    _btnRatio43.frame = CGRectOffset(_btnRatio11.frame, -(30 + BUTTON_CONTROL_SIZE), 0);
-    [_btnRatio43 setImage:[UIImage imageNamed:@"43"] forState:UIControlStateNormal];
-    [_btnRatio43 setImage:[UIImage imageNamed:@"43_hover"] forState:UIControlStateHighlighted];
-    [_btnRatio43 addTarget:self action:@selector(onBtnRatioClicked:) forControlEvents:UIControlEventTouchUpInside];
-    _btnRatio43.tag = VIDEO_ASPECT_RATIO_3_4;
-    _btnRatio43.hidden = YES;
-    [self.view addSubview:_btnRatio43];
-    
-    switch (_videoConfig.videoRatio) {
-        case VIDEO_ASPECT_RATIO_3_4:
-            [self onBtnRatioClicked:_btnRatio43];
-            break;
-        case VIDEO_ASPECT_RATIO_1_1:
-            [self onBtnRatioClicked:_btnRatio11];
-            break;
-        case VIDEO_ASPECT_RATIO_9_16:
-            [self onBtnRatioClicked:_btnRatio169];
-            break;
-            
-        default:
-            break;
-    }
-    
-    UILabel *ratioLabel = [[UILabel alloc] initWithFrame:CGRectMake(_btnRatio169.x, _btnRatio169.bottom + 10, BUTTON_CONTROL_SIZE, 11)];
+
+    UIButton *btnRatio169 = [SmallButton buttonWithType:UIButtonTypeCustom];
+    [btnRatio169 setImage:[UIImage imageNamed:@"169"] forState:UIControlStateNormal];
+    [btnRatio169 setImage:[UIImage imageNamed:@"169_hover"] forState:UIControlStateHighlighted];
+    btnRatio169.tag = VIDEO_ASPECT_RATIO_9_16;
+
+    UIButton *btnRatio916 = [SmallButton buttonWithType:UIButtonTypeCustom];
+    [btnRatio916 setImage:[UIImage imageNamed:@"916"] forState:UIControlStateNormal];
+    [btnRatio916 setImage:[UIImage imageNamed:@"916_hover"] forState:UIControlStateHighlighted];
+    btnRatio916.tag = VIDEO_ASPECT_RATIO_16_9;
+
+    UIButton *btnRatio11 = [SmallButton buttonWithType:UIButtonTypeCustom];
+    [btnRatio11 setImage:[UIImage imageNamed:@"11"] forState:UIControlStateNormal];
+    [btnRatio11 setImage:[UIImage imageNamed:@"11_hover"] forState:UIControlStateHighlighted];
+    btnRatio11.tag = VIDEO_ASPECT_RATIO_1_1;
+
+    UIButton *btnRatio43 = [SmallButton buttonWithType:UIButtonTypeCustom];
+    [btnRatio43 setImage:[UIImage imageNamed:@"43"] forState:UIControlStateNormal];
+    [btnRatio43 setImage:[UIImage imageNamed:@"43_hover"] forState:UIControlStateHighlighted];
+    btnRatio43.tag = VIDEO_ASPECT_RATIO_3_4;
+
+    UIButton *btnRatio34 = [SmallButton buttonWithType:UIButtonTypeCustom];
+    [btnRatio34 setImage:[UIImage imageNamed:@"34"] forState:UIControlStateNormal];
+    [btnRatio34 setImage:[UIImage imageNamed:@"34_hover"] forState:UIControlStateHighlighted];
+    btnRatio34.tag = VIDEO_ASPECT_RATIO_4_3;
+
+    _btnRatioGroup = [[RecordSideButtonGroup alloc] initWithButtons:@[btnRatio43, btnRatio34, btnRatio11, btnRatio916, btnRatio169]
+                                                         buttonSize:CGSizeMake(BUTTON_CONTROL_SIZE, BUTTON_CONTROL_SIZE)
+                                                            spacing:30];
+    [_btnRatioGroup addTarget:self action:@selector(onBtnRatioClicked:) forControlEvents:UIControlEventValueChanged];
+    CGRect frame = _btnRatioGroup.frame;
+    frame.size = _btnRatioGroup.intrinsicContentSize;
+    frame.origin = CGPointMake(CGRectGetWidth(self.view.bounds) - CGRectGetWidth(frame) - 20, top);
+    _btnRatioGroup.frame = frame;
+    [self.view addSubview:_btnRatioGroup];
+    [_btnRatioGroup.buttons enumerateObjectsUsingBlock:^(UIButton * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        if (obj.tag == _videoConfig.videoRatio) {
+            _btnRatioGroup.selectedIndex = idx;
+            *stop = YES;
+        }
+    }];
+
+    CGFloat x = CGRectGetWidth(self.view.bounds) - 20 - BUTTON_CONTROL_SIZE;
+    UILabel *ratioLabel = [[UILabel alloc] initWithFrame:CGRectMake(x, _btnRatioGroup.bottom + 5, BUTTON_CONTROL_SIZE, 11)];
     ratioLabel.text = @"屏比";
     ratioLabel.textColor = RightSideButtonLabelColor;
     ratioLabel.font = [UIFont systemFontOfSize:12];
@@ -333,7 +299,7 @@ TXUGCRecordListener
     [self.view addSubview:ratioLabel];
     
     _btnBeauty = [SmallButton buttonWithType:UIButtonTypeCustom];
-    _btnBeauty.frame = CGRectOffset(_btnRatio169.frame, 0, 72);
+    _btnBeauty.frame = CGRectMake(x, _btnRatioGroup.top + 72, BUTTON_CONTROL_SIZE, BUTTON_CONTROL_SIZE);
     [_btnBeauty setImage:[UIImage imageNamed:@"beauty_record"] forState:UIControlStateNormal];
     [_btnBeauty setImage:[UIImage imageNamed:@"beauty_hover"] forState:UIControlStateHighlighted];
     [_btnBeauty addTarget:self action:@selector(onBtnBeautyClicked) forControlEvents:UIControlEventTouchUpInside];
@@ -509,89 +475,10 @@ TXUGCRecordListener
     }
 }
 
--(void)onBtnRatioClicked:(UIButton *)btn
+-(void)onBtnRatioClicked:(RecordSideButtonGroup *)sender
 {
-    switch (btn.tag) {
-        case VIDEO_ASPECT_RATIO_9_16:
-        {
-            if (btn.right + 20 == self.view.frame.size.width && [self ratioIsClosure]) {
-                _btnRatio11.frame = CGRectOffset(btn.frame, -(30 + BUTTON_CONTROL_SIZE), 0);
-                _btnRatio43.frame = CGRectOffset(_btnRatio11.frame, -(30 + BUTTON_CONTROL_SIZE), 0);
-                _btnRatio11.hidden = NO;
-                _btnRatio43.hidden = NO;
-            }else{
-                btn.frame = _btnRatioFrame;
-                _btnRatio11.frame = _btnRatioFrame;
-                _btnRatio43.frame = _btnRatioFrame;
-                _btnRatio11.hidden = YES;
-                _btnRatio43.hidden = YES;
-            }
-            CGFloat height = _videoRecordView.frame.size.width * 16 / 9;
-            [UIView animateWithDuration:0.2 animations:^{
-                _videoRecordView.frame = CGRectMake(0, (self.view.frame.size.height - height) / 2.0, _videoRecordView.frame.size.width, height);;
-            }];
-            _aspectRatio = VIDEO_ASPECT_RATIO_9_16;
-            [[TXUGCRecord shareInstance] setAspectRatio:_aspectRatio];
-        }
-            break;
-        case VIDEO_ASPECT_RATIO_1_1:
-        {
-            if (btn.right + 20 == self.view.frame.size.width && [self ratioIsClosure]) {
-                _btnRatio43.frame = CGRectOffset(btn.frame, -(30 + BUTTON_CONTROL_SIZE), 0);
-                _btnRatio169.frame = CGRectOffset(_btnRatio43.frame, -(30 + BUTTON_CONTROL_SIZE), 0);
-                _btnRatio43.hidden = NO;
-                _btnRatio169.hidden = NO;
-            }else{
-                btn.frame = _btnRatioFrame;
-                _btnRatio43.frame = _btnRatioFrame;
-                _btnRatio169.frame = _btnRatioFrame;
-                _btnRatio43.hidden = YES;
-                _btnRatio169.hidden = YES;
-            }
-            CGFloat height = _videoRecordView.frame.size.width;
-            [UIView animateWithDuration:0.2 animations:^{
-                _videoRecordView.frame = CGRectMake(0, (self.view.frame.size.height - height) / 2.0, _videoRecordView.frame.size.width, height);;
-            }];
-            _aspectRatio = VIDEO_ASPECT_RATIO_1_1;
-            [[TXUGCRecord shareInstance] setAspectRatio:_aspectRatio];
-        }
-            
-            break;
-        case VIDEO_ASPECT_RATIO_3_4:
-        {
-            if (btn.right + 20 == self.view.frame.size.width && [self ratioIsClosure]) {
-                _btnRatio169.frame = CGRectOffset(btn.frame, -(30 + BUTTON_CONTROL_SIZE), 0);
-                _btnRatio11.frame = CGRectOffset(_btnRatio169.frame, -(30 + BUTTON_CONTROL_SIZE), 0);
-                _btnRatio169.hidden = NO;
-                _btnRatio11.hidden = NO;
-            }else{
-                btn.frame = _btnRatioFrame;
-                _btnRatio169.frame = _btnRatioFrame;
-                _btnRatio11.frame = _btnRatioFrame;
-                _btnRatio169.hidden = YES;
-                _btnRatio11.hidden = YES;
-            }
-            CGFloat height = _videoRecordView.frame.size.width * 4 / 3;
-            [UIView animateWithDuration:0.2 animations:^{
-                _videoRecordView.frame = CGRectMake(0, (self.view.frame.size.height - height) / 2.0, _videoRecordView.frame.size.width, height);;
-            }];
-            _aspectRatio = VIDEO_ASPECT_RATIO_3_4;
-            [[TXUGCRecord shareInstance] setAspectRatio:_aspectRatio];
-        }
-            
-            break;
-        default:
-            break;
-    }
-    btn.hidden = NO;
-}
-
--(BOOL)ratioIsClosure
-{
-    if (CGRectEqualToRect(_btnRatio43.frame, _btnRatio11.frame)) {
-        return YES;
-    }
-    return NO;
+    _aspectRatio = sender.buttons[sender.selectedIndex].tag;
+    [[TXUGCRecord shareInstance] setAspectRatio:_aspectRatio];
 }
 
 #ifndef UGC_SMART
@@ -726,6 +613,49 @@ TXUGCRecordListener
     [self stopVideoRecord];
 }
 
+- (void)_addWatermark:(TXUGCCustomConfig *)param {
+    CGFloat videoWidth, videoHeight;
+    switch (param.videoResolution) {
+        case VIDEO_RESOLUTION_360_640:
+            videoWidth = 360;
+            videoHeight = 640;
+            break;
+        case VIDEO_RESOLUTION_540_960:
+            videoWidth = 540;
+            videoHeight = 960;
+            break;
+        case VIDEO_RESOLUTION_720_1280:
+            videoWidth = 720;
+            videoHeight = 1280;
+            break;
+        case VIDEO_RESOLUTION_1080_1920:
+            videoWidth = 1080;
+            videoHeight = 1920;
+            break;
+    }
+    UIImage *cloud = [UIImage imageNamed:@"tcloud_symbol"];
+    CGFloat imageWidth;
+    if (videoWidth > videoHeight) {
+        imageWidth = 0.08*videoHeight;
+    } else {
+        imageWidth = 0.08*videoWidth;
+    }
+    CGFloat imageHeight = imageWidth / cloud.size.width * cloud.size.height;
+
+    NSDictionary *textAttribute = @{NSFontAttributeName:[UIFont boldSystemFontOfSize:imageHeight],
+                                    NSForegroundColorAttributeName:[UIColor whiteColor]};
+    CGSize textSize = [@"腾讯云" sizeWithAttributes:textAttribute];
+    CGSize canvasSize = CGSizeMake(ceil(imageWidth + textSize.width), ceil(MAX(imageHeight,textSize.height) + imageWidth* 0.05));
+    UIGraphicsBeginImageContext(canvasSize);
+    [cloud drawInRect:CGRectMake(0, (canvasSize.height - imageHeight) / 2, imageWidth, imageHeight)];
+    [@"腾讯云" drawAtPoint:CGPointMake(imageWidth*1.05, (canvasSize.height - textSize.height) / 2)
+         withAttributes:textAttribute];
+    UIImage *waterimage = UIGraphicsGetImageFromCurrentImageContext(); //[UIImage imageNamed:@"watermark"];
+    UIGraphicsEndImageContext();
+
+    [[TXUGCRecord shareInstance] setWaterMark:waterimage normalizationFrame:CGRectMake(0.01, 0.01, canvasSize.width / videoWidth, 0)];
+}
+
 -(void)startCameraPreview
 {
     
@@ -746,58 +676,19 @@ TXUGCRecordListener
         param.minDuration = MIN_RECORD_TIME;
         param.maxDuration = MAX_RECORD_TIME;
         [[TXUGCRecord shareInstance] startCameraCustom:param preview:_videoRecordView];
-        [[TXUGCRecord shareInstance] setAspectRatio:_aspectRatio];
+        [[TXUGCRecord shareInstance] setAspectRatio: _aspectRatio];
+        [[TXUGCRecord shareInstance] setVideoRenderMode:VIDEO_RENDER_MODE_ADJUST_RESOLUTION];
         //[[TXUGCRecord shareInstance] setZoom:2.5];
 #ifndef UGC_SMART
         [TXUGCRecord shareInstance].videoProcessDelegate = self;
-        
-        
-        CGFloat videoWidth, videoHeight;
-        switch (param.videoResolution) {
-            case VIDEO_RESOLUTION_360_640:
-                videoWidth = 360;
-                videoHeight = 640;
-                break;
-            case VIDEO_RESOLUTION_540_960:
-                videoWidth = 540;
-                videoHeight = 960;
-                break;
-            case VIDEO_RESOLUTION_720_1280:
-                videoWidth = 720;
-                videoHeight = 1280;
-                break;
-            case VIDEO_RESOLUTION_1080_1920:
-                videoWidth = 1080;
-                videoHeight = 1920;
-                break;
-        }
-        UIImage *cloud = [UIImage imageNamed:@"tcloud_symbol"];
-        CGFloat imageWidth;
-        if (videoWidth > videoHeight) {
-            imageWidth = 0.08*videoHeight;
-        } else {
-            imageWidth = 0.08*videoWidth;
-        }
-        CGFloat imageHeight = imageWidth / cloud.size.width * cloud.size.height;
-        
-        NSDictionary *textAttribute = @{NSFontAttributeName:[UIFont boldSystemFontOfSize:imageHeight],
-                                        NSForegroundColorAttributeName:[UIColor whiteColor]};
-        CGSize textSize = [@"腾讯云" sizeWithAttributes:textAttribute];
-        CGSize canvasSize = CGSizeMake(ceil(imageWidth + textSize.width), ceil(MAX(imageHeight,textSize.height) + imageWidth* 0.05));
-        UIGraphicsBeginImageContext(canvasSize);
-        [cloud drawInRect:CGRectMake(0, (canvasSize.height - imageHeight) / 2, imageWidth, imageHeight)];
-        [@"腾讯云" drawAtPoint:CGPointMake(imageWidth*1.05, (canvasSize.height - textSize.height) / 2)
-             withAttributes:textAttribute];
-        UIImage *waterimage = UIGraphicsGetImageFromCurrentImageContext(); //[UIImage imageNamed:@"watermark"];
-        UIGraphicsEndImageContext();
-        
-        [[TXUGCRecord shareInstance] setWaterMark:waterimage normalizationFrame:CGRectMake(0.01, 0.01, canvasSize.width / videoWidth, 0)];
+//        [self _addWatermark:param];
 #endif
         [_vBeauty resetValues];
         _cameraPreviewing = YES;
     }
     
 }
+
 
 /* 各种情况下的横竖屏推流 参数设置
  //activity竖屏模式，竖屏推流
@@ -896,10 +787,8 @@ TXUGCRecordListener
         _isPaused = NO;
         
         //录制过程中不能切换分辨率
-        _btnRatio169.enabled = NO;
-        _btnRatio43.enabled = NO;
-        _btnRatio11.enabled = NO;
-        
+        _btnRatioGroup.enabled = NO;
+
 #ifndef UGC_SMART
         _speedOptionControl.hidden = YES;
 #endif
@@ -933,9 +822,8 @@ TXUGCRecordListener
     [_musicView resetUI];
     _btnMusic.enabled = YES;
 #endif
-    _btnRatio169.enabled = YES;
-    _btnRatio43.enabled = YES;
-    _btnRatio11.enabled = YES;
+
+    _btnRatioGroup.enabled = YES;
     _isPaused = NO;
     _videoRecording = NO;
 }
@@ -1205,20 +1093,14 @@ TXUGCRecordListener
 }
 
 - (void)onSetBeautyStyle:(NSUInteger)beautyStyle beautyLevel:(float)beautyLevel whitenessLevel:(float)whitenessLevel ruddinessLevel:(float)ruddinessLevel{
-    [[TXUGCRecord shareInstance] setBeautyStyle:beautyStyle beautyLevel:beautyLevel whitenessLevel:whitenessLevel ruddinessLevel:ruddinessLevel];
+    TXBeautyManager *manager = [[TXUGCRecord shareInstance] getBeautyManager];
+    [manager setBeautyStyle:(TXBeautyStyle)beautyStyle];
+    [manager setBeautyLevel:beautyLevel];
+    [manager setWhitenessLevel:whitenessLevel];
+    [manager setRuddyLevel:ruddinessLevel];
 }
 
 #ifndef UGC_SMART
-- (void)onSetEyeScaleLevel:(float)eyeScaleLevel
-{
-    [[TXUGCRecord shareInstance] setEyeScaleLevel:eyeScaleLevel];
-}
-
-- (void)onSetFaceScaleLevel:(float)faceScaleLevel
-{
-    [[TXUGCRecord shareInstance] setFaceScaleLevel:faceScaleLevel];
-}
-
 - (void)onSetGreenScreenFile:(NSURL *)file
 {
     [[TXUGCRecord shareInstance] setGreenScreenFile:file];
@@ -1226,23 +1108,20 @@ TXUGCRecordListener
 
 - (void)onSelectMotionTmpl:(NSString *)tmplName inDir:(NSString *)tmplDir
 {
-    [[TXUGCRecord shareInstance] selectMotionTmpl:tmplName inDir:tmplDir];
+    [[[TXUGCRecord shareInstance] getBeautyManager] setMotionTmpl:tmplName inDir:tmplDir];
 }
 
-- (void)onSetFaceVLevel:(float)faceVLevel{
-    [[TXUGCRecord shareInstance] setFaceVLevel:faceVLevel];
+- (BOOL)respondsToSelector:(SEL)aSelector
+{
+    if (![super respondsToSelector:aSelector]) {
+        return [[[TXUGCRecord shareInstance] getBeautyManager] respondsToSelector:aSelector];
+    }
+    return YES;
 }
 
-- (void)onSetChinLevel:(float)chinLevel{
-    [[TXUGCRecord shareInstance] setChinLevel:chinLevel];
-}
-
-- (void)onSetNoseSlimLevel:(float)slimLevel{
-    [[TXUGCRecord shareInstance] setNoseSlimLevel:slimLevel];
-}
-
-- (void)onSetFaceShortLevel:(float)faceShortlevel{
-    [[TXUGCRecord shareInstance] setFaceShortLevel:faceShortlevel];
+- (id)forwardingTargetForSelector:(SEL)aSelector
+{
+    return [[TXUGCRecord shareInstance] getBeautyManager];
 }
 
 #endif
@@ -1265,7 +1144,7 @@ TXUGCRecordListener
     NSInteger min = (int)_currentRecordTime / 60;
     NSInteger sec = (int)_currentRecordTime % 60;
     
-    [_recordTimeLabel setText:[NSString stringWithFormat:@"%02ld:%02ld", min, sec]];
+    [_recordTimeLabel setText:[NSString stringWithFormat:@"%02ld:%02ld", (long)min, (long)sec]];
     [_recordTimeLabel sizeToFit];
 }
 
@@ -1273,7 +1152,7 @@ TXUGCRecordListener
 -(void) onRecordProgress:(NSInteger)milliSecond;
 {
     [self refreshRecordTime: milliSecond / 1000.0];
-    
+
     if (milliSecond / 1000 >= MIN_RECORD_TIME) {
         [_btnDone setImage:[UIImage imageNamed:@"confirm"] forState:UIControlStateNormal];
         [_btnDone setImage:[UIImage imageNamed:@"confirm_hover"] forState:UIControlStateHighlighted];
@@ -1289,32 +1168,29 @@ TXUGCRecordListener
 
 -(void) onRecordComplete:(TXUGCRecordResult*)result;
 {
-    if (_appForeground)
-    {
-        TX_Enum_Type_RenderMode renderMode = /*_aspectRatio == VIDEO_ASPECT_RATIO_9_16 ? RENDER_MODE_FILL_SCREEN :*/ RENDER_MODE_FILL_EDGE;
-        if (result.retCode == UGC_RECORD_RESULT_OK) {
-            if (self.onRecordCompleted) {
-                self.onRecordCompleted(result);
-            }
-            [self stopCameraPreview];
+    if (result.retCode == UGC_RECORD_RESULT_OK) {
+        if (self.onRecordCompleted) {
+            self.onRecordCompleted(result);
         }
-        else if(result.retCode == UGC_RECORD_RESULT_OK_BEYOND_MAXDURATION){
-            if (self.onRecordCompleted) {
-                self.onRecordCompleted(result);
-            }
-            [self stopCameraPreview];
-            [self stopVideoRecord];
-        }
-        else if(result.retCode == UGC_RECORD_RESULT_OK_INTERRUPT){
-            [self toastTip:@"录制被打断"];
-        }
-        else if(result.retCode == UGC_RECORD_RESULT_OK_UNREACH_MINDURATION){
-            [self toastTip:@"至少要录够5秒"];
-        }
-        else if(result.retCode == UGC_RECORD_RESULT_FAILED){
-            [self toastTip:@"视频录制失败"];
-        }
+        [self stopCameraPreview];
     }
+    else if(result.retCode == UGC_RECORD_RESULT_OK_BEYOND_MAXDURATION){
+        if (self.onRecordCompleted) {
+            self.onRecordCompleted(result);
+        }
+        [self stopCameraPreview];
+        [self stopVideoRecord];
+    }
+    else if(result.retCode == UGC_RECORD_RESULT_OK_INTERRUPT){
+        [self toastTip:@"录制被打断"];
+    }
+    else if(result.retCode == UGC_RECORD_RESULT_OK_UNREACH_MINDURATION){
+        [self toastTip:@"至少要录够5秒"];
+    }
+    else if(result.retCode == UGC_RECORD_RESULT_FAILED){
+        [self toastTip:@"视频录制失败"];
+    }
+
     //分片不再使用的时候请主动删除，否则分片会一直存在本地，导致内存占用越来越大，下次startRecord时候，SDK也会默认加载当前分片
     [[TXUGCRecord shareInstance].partsManager deleteAllParts];
 #ifndef UGC_SMART
@@ -1336,22 +1212,22 @@ TXUGCRecordListener
     frameRC.origin.y = frameRC.size.height - 100;
     frameRC.size.height -= 100;
     __block UITextView * toastView = [[UITextView alloc] init];
-    
+
     toastView.editable = NO;
     toastView.selectable = NO;
-    
+
     frameRC.size.height = [toastView sizeThatFits:CGSizeMake(frameRC.size.width, MAXFLOAT)].height;
-    
+
     toastView.frame = frameRC;
-    
+
     toastView.text = toastInfo;
     toastView.backgroundColor = [UIColor whiteColor];
     toastView.alpha = 0.5;
-    
+
     [self.view addSubview:toastView];
-    
+
     dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC);
-    
+
     dispatch_after(popTime, dispatch_get_main_queue(), ^(){
         [toastView removeFromSuperview];
         toastView = nil;
@@ -1364,10 +1240,10 @@ TXUGCRecordListener
     CGPoint translation = [recognizer translationInView:self.view.superview];
     [recognizer velocityInView:self.view];
     CGPoint speed = [recognizer velocityInView:self.view];
-    
-//    NSLog(@"pan center:(%.2f)", translation.x);
-//    NSLog(@"pan speed:(%.2f)", speed.x);
-    
+
+    //    NSLog(@"pan center:(%.2f)", translation.x);
+    //    NSLog(@"pan speed:(%.2f)", speed.x);
+
     float ratio = translation.x / self.view.frame.size.width;
     float leftRatio = ratio;
     NSInteger index = [_vBeauty currentFilterIndex];
@@ -1389,7 +1265,7 @@ TXUGCRecordListener
         filter2Level = [_vBeauty filterMixLevelByIndex:index + 1] / 10;
         leftRatio = 1 + leftRatio;
     }
-    
+
     if (recognizer.state == UIGestureRecognizerStateChanged) {
         [[TXUGCRecord shareInstance] setFilter:filterImage1 leftIntensity:filter1Level rightFilter:filterImage2 rightIntensity:filter2Level leftRatio:leftRatio];
     }
@@ -1412,7 +1288,7 @@ TXUGCRecordListener
                     _vBeauty.currentFilterIndex = index + 1;
                 }
             }
-            
+
             UILabel* filterTipLabel = [UILabel new];
             filterTipLabel.text = [_vBeauty currentFilterName];
             filterTipLabel.font = [UIFont systemFontOfSize:30];
@@ -1421,7 +1297,7 @@ TXUGCRecordListener
             [filterTipLabel sizeToFit];
             filterTipLabel.center = CGPointMake(self.view.size.width / 2, self.view.size.height / 3);
             [self.view addSubview:filterTipLabel];
-            
+
             [UIView animateWithDuration:0.25 animations:^{
                 filterTipLabel.alpha = 1;
             } completion:^(BOOL finished) {
@@ -1441,9 +1317,9 @@ TXUGCRecordListener
         completion();
         return;
     }
-    
+
     static float delta = 1.f / 12;
-    
+
     BOOL isDependRadio = fabs(speed) < 500;
     if (isDependRadio) {
         if (leftRadio < 0.5) {
@@ -1460,9 +1336,9 @@ TXUGCRecordListener
         else
             leftRadio -= delta;
     }
-    
+
     [[TXUGCRecord shareInstance] setFilter:filter1Image leftIntensity:filter1MixLevel rightFilter:filter2Image rightIntensity:filter2MixLevel leftRatio:leftRadio];
-    
+
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.f / 30 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self animateFromFilter1:filter1Image filter2:filter2Image filter1MixLevel:filter1MixLevel filter2MixLevel:filter2MixLevel leftRadio:leftRadio speed:speed completion:completion];
     });
@@ -1475,8 +1351,7 @@ TXUGCRecordListener
     if (i++ % 100 == 0) {
         NSLog(@"onPreProcessTexture width:%f height:%f", width, height);
     }
-    
-    NSLog(@"-------------------- texture ~");
+
     return texture;
 }
 

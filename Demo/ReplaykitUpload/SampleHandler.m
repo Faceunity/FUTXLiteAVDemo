@@ -59,7 +59,8 @@ static CGImagePropertyOrientation s_orientation = kCGImagePropertyOrientationUp;
 
 - (instancetype) init {
     self = [super init];
-    
+    [TXLiveBase setLicenceURL:@"http://license.vod2.myqcloud.com/license/v1/c582e3b0b036a80dbb93475ee76acd32/TXLiveSDK.licence" key:@"ea3ec44969dd7112e2a732ec2b1f76bf"];
+
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleReplayKit2PushStartNotification:) name:@"Cocoa_ReplayKit2_Push_Start" object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleReplayKit2PushStopNotification:) name:@"Cocoa_ReplayKit2_Push_Stop" object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleReplayKit2RotateChangeNotification:) name:@"Cocoa_ReplayKit2_Rotate_Change" object:nil];
@@ -216,7 +217,16 @@ static void onDarwinReplayKit2ResolutionChange(CFNotificationCenterRef center,
         return;
     }
 //    [self sendLocalNotificationToHostAppWithTitle:@"腾讯云录屏推流" msg:s_resolution userInfo:nil];
-
+    //test pausePush
+//    if ([s_resolution isEqualToString:kResolutionSD]) {
+//        [s_txLivePublisher pausePush];
+//
+//    }
+//    if ([s_resolution isEqualToString:kResolutionHD]) {
+//        [s_txLivePublisher resumePush];
+//
+//    }
+//    return;
     [self setCustomRotationAndResolution:s_landScape?kReplayKit2Lanscape:kReplayKit2Portrait resolution:s_resolution];
 }
 
@@ -260,6 +270,10 @@ static void onDarwinReplayKit2ResolutionChange(CFNotificationCenterRef center,
         config.audioSampleRate = AUDIO_SAMPLE_RATE_44100;
         config.audioChannels   = 1;
         
+//        config.pauseFps = 10;
+//        config.pauseTime = 3600;
+//        config.pauseImg = [UIImage imageNamed:@"pause_publish.jpg"];
+        
         s_txLivePublisher = [[TXLivePush alloc] initWithConfig:config];
         [self setCustomRotationAndResolution:s_landScape?kReplayKit2Lanscape:kReplayKit2Portrait resolution:s_resolution];
         [s_txLivePublisher startPush:s_rtmpUrl];
@@ -283,7 +297,9 @@ static void onDarwinReplayKit2ResolutionChange(CFNotificationCenterRef center,
 
         //分辨率与码率根据业务需要设置，注意分辨率的16字节对齐
         if ([resolution isEqualToString:kResolutionSD]) {
-            config.sampleBufferSize = CGSizeMake(368, (uint)(360 * screenSize.height / screenSize.width));
+            uint32_t hight = (uint)(360 * screenSize.height / screenSize.width);
+            hight = hight + (16 - hight % 16);
+            config.sampleBufferSize = CGSizeMake(368, hight);
             config.videoBitrateMin = 400;
             config.videoBitratePIN = 800;
             config.videoBitrateMax = 1200;
@@ -292,15 +308,21 @@ static void onDarwinReplayKit2ResolutionChange(CFNotificationCenterRef center,
         else if ([resolution isEqualToString:kResolutionFHD]) {
     //        config.sampleBufferSize = CGSizeMake(1088, (uint)(1080 * screenSize.height / screenSize.width)); //建议不超过720P
     //        config.videoResolution = VIDEO_RESOLUTION_TYPE_720_1280;
-            config.autoSampleBufferSize = YES;
+            uint32_t hight = (uint)(720 * screenSize.height / screenSize.width);
+            hight = hight + (16 - hight % 16);
+//            config.autoSampleBufferSize = YES;
+            config.sampleBufferSize = CGSizeMake(720, hight);
             config.videoBitrateMin = 1600;
             config.videoBitratePIN = 2400;
             config.videoBitrateMax = 3000;
-            config.videoFPS = 30;
+//            config.videoFPS = 30;
+            config.videoFPS = 48;
 
         }
         else {
-            config.sampleBufferSize = CGSizeMake(544, (uint)(540 * screenSize.height / screenSize.width));
+            uint32_t hight = (uint)(540 * screenSize.height / screenSize.width);
+            hight = hight + (16 - hight % 16);
+            config.sampleBufferSize = CGSizeMake(544, hight);
             config.videoBitrateMin = 800;
             config.videoBitratePIN = 1400;
             config.videoBitrateMax = 1800;
@@ -439,7 +461,7 @@ static void onDarwinReplayKit2ResolutionChange(CFNotificationCenterRef center,
                 if (CMSampleBufferDataIsReady(sampleBuffer) != NO) {
                     [s_txLivePublisher sendAudioSampleBuffer:sampleBuffer withType:sampleBufferType];
                 }
-//                NSLog(@"AppPTS:%.2f", CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)));
+                NSLog(@"AppPTS:%.2f", CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)));
 
                 break;
             case RPSampleBufferTypeAudioMic:
@@ -447,7 +469,7 @@ static void onDarwinReplayKit2ResolutionChange(CFNotificationCenterRef center,
                 if (CMSampleBufferDataIsReady(sampleBuffer) != NO) {
                     [s_txLivePublisher sendAudioSampleBuffer:sampleBuffer withType:sampleBufferType];
                 }
-//                NSLog(@"MicPTS:%.2f", CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)));
+                NSLog(@"MicPTS:%.2f", CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)));
 
                 break;
                 

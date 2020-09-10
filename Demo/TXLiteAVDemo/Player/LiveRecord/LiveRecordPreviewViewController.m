@@ -1,10 +1,10 @@
 
 #import <Foundation/Foundation.h>
 #import "LiveRecordPreviewViewController.h"
-#import <AssetsLibrary/AssetsLibrary.h>
 #import <AVFoundation/AVFoundation.h>
 #import "MBProgressHUD.h"
 #import "TXLivePlayer.h"
+#import "PhotoUtil.h"
 
 #define BUTTON_PREVIEW_SIZE         65
 #define BUTTON_CONTROL_SIZE         40
@@ -271,9 +271,9 @@
 
 -(void)onBtnDownloadClicked
 {
-    ALAssetsLibrary *library = [[ALAssetsLibrary alloc] init];
-    [library writeVideoAtPathToSavedPhotosAlbum:[NSURL fileURLWithPath:_videoPath] completionBlock:^(NSURL *assetURL, NSError *error) {
-        if (error != nil) {
+    [PhotoUtil saveAssetToAlbum:[NSURL fileURLWithPath:_videoPath]
+                     completion:^(BOOL success, NSError * _Nullable error) {
+        if (!success) {
             NSLog(@"save video fail:%@", error);
         }
     }];

@@ -1,10 +1,10 @@
 
 #import <Foundation/Foundation.h>
 #import "VideoPreviewViewController.h"
-#import <AssetsLibrary/AssetsLibrary.h>
 #import <AVFoundation/AVFoundation.h>
 #import "MBProgressHUD.h"
 #import "SmallButton.h"
+#import "PhotoUtil.h"
 
 #define BUTTON_PREVIEW_SIZE         65
 #define BUTTON_CONTROL_SIZE         40
@@ -26,7 +26,7 @@
     BOOL                            _showEditButton;
     
     NSString*                       _videoPath;
-    TXVodPlayer*                    _voidPlayer;
+    TXVodPlayer*                    _vodPlayer;
     TX_Enum_Type_RenderMode         _renderMode;
 }
 @end
@@ -48,9 +48,9 @@
         _previewing   = NO;
         _startPlay    = NO;
         
-        _voidPlayer = [[TXVodPlayer alloc] init];
-        _voidPlayer.vodDelegate = self;
-        _voidPlayer.config.playerType = PLAYER_AVPLAYER;
+        _vodPlayer = [[TXVodPlayer alloc] init];
+        _vodPlayer.vodDelegate = self;
+        _vodPlayer.config.playerType = PLAYER_AVPLAYER;
         
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAppDidEnterBackGround:) name:UIApplicationDidEnterBackgroundNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAppWillEnterForeground:) name:UIApplicationWillEnterForegroundNotification object:nil];
@@ -77,7 +77,7 @@
     
     _navigationBarHidden = self.navigationController.navigationBar.hidden;
     self.navigationController.navigationBar.hidden = YES;
-    [UIApplication sharedApplication].statusBarHidden = YES;
+//    [UIApplication sharedApplication].statusBarHidden = YES;
     
     if (_previewing)
     {
@@ -90,14 +90,14 @@
     [super viewWillDisappear:animated];
     
     self.navigationController.navigationBar.hidden = _navigationBarHidden;
-    [UIApplication sharedApplication].statusBarHidden = NO;
+//    [UIApplication sharedApplication].statusBarHidden = NO;
     
     [self stopVideoPreview:YES];
 }
 
 -(void)dealloc{
-    [_voidPlayer removeVideoWidget];
-    [_voidPlayer stopPlay];
+    [_vodPlayer removeVideoWidget];
+    [_vodPlayer stopPlay];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
@@ -128,11 +128,11 @@
 -(void)startVideoPreview:(BOOL) startPlay
 {
     if(startPlay == YES){
-        [_voidPlayer setupVideoWidget:_videoPreview insertIndex:0];
-        [_voidPlayer startPlay:_videoPath];
-        [_voidPlayer setRenderMode:_renderMode];
+        [_vodPlayer setupVideoWidget:_videoPreview insertIndex:0];
+        [_vodPlayer startPlay:_videoPath];
+        [_vodPlayer setRenderMode:_renderMode];
     }else{
-        [_voidPlayer resume];
+        [_vodPlayer resume];
     }
     
 }
@@ -140,11 +140,16 @@
 -(void)stopVideoPreview:(BOOL) stopPlay
 {
     
-    if(stopPlay == YES)
-        [_voidPlayer stopPlay];
-    else
-        [_voidPlayer pause];
-    
+    if(stopPlay == YES) {
+        [_vodPlayer stopPlay];
+        _sdPreviewSlider.value = 0;
+        _sdPreviewSlider.enabled = NO;
+        _startPlay = NO;
+        [_btnStartPreview setImage:[UIImage imageNamed:@"startpreview"] forState:UIControlStateNormal];
+        [_btnStartPreview setImage:[UIImage imageNamed:@"startpreview_press"] forState:UIControlStateSelected];
+    }else {
+        [_vodPlayer pause];
+    }
 }
 
 #pragma mark ---- Video Preview ----
@@ -153,7 +158,7 @@
     //[_livePlayer setRenderMode:RENDER_MODE_FILL_EDGE];
     self.title = @"视频回放";
     self.navigationItem.hidesBackButton = YES;
-    
+    CGFloat top = [UIApplication sharedApplication].statusBarFrame.size.height + 5;
     
     UIImageView * coverImageView = [[UIImageView alloc] initWithFrame:self.view.frame];
     coverImageView.backgroundColor = UIColor.blackColor;
@@ -175,8 +180,7 @@
     [_btnStartPreview addTarget:self action:@selector(onBtnPreviewStartClicked) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:_btnStartPreview];
     
-    UIButton *btnPop = [[SmallButton alloc] initWithFrame:CGRectMake(0, 0, BUTTON_CONTROL_SIZE, BUTTON_CONTROL_SIZE)];
-    btnPop.center = CGPointMake(30, 30);
+    UIButton *btnPop = [[SmallButton alloc] initWithFrame:CGRectMake(10, top, BUTTON_CONTROL_SIZE, BUTTON_CONTROL_SIZE)];
     [btnPop setImage:[UIImage imageNamed:@"back"] forState:UIControlStateNormal];
     [btnPop addTarget:self action:@selector(onBtnPopBack) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:btnPop];
@@ -185,14 +189,32 @@
     if (@available(iOS 11, *)) {
         bottom -= [UIApplication sharedApplication].keyWindow.safeAreaInsets.bottom;
     }
+    _sdPreviewSlider = [[UISlider alloc] init];
+    _sdPreviewSlider.frame = CGRectMake(0, 0, self.view.frame.size.width - 40, 60);
+    _sdPreviewSlider.center = CGPointMake(self.view.frame.size.width / 2, bottom - 80);
+    [_sdPreviewSlider setThumbImage:[UIImage imageNamed:@"slider"] forState:UIControlStateNormal];
+    [_sdPreviewSlider setMinimumTrackImage:[UIImage imageNamed:@"green"] forState:UIControlStateNormal];
+    [_sdPreviewSlider setMaximumTrackImage:[UIImage imageNamed:@"gray"] forState:UIControlStateNormal];
+    [_sdPreviewSlider addTarget:self action:@selector(onDragEnd:) forControlEvents:UIControlEventTouchUpInside];
+    [_sdPreviewSlider addTarget:self action:@selector(onDragStart:) forControlEvents:UIControlEventTouchDown];
+    _sdPreviewSlider.enabled = NO;
+    [self.view addSubview:_sdPreviewSlider];
     
+    _progressTipLabel = [UILabel new];
+    _progressTipLabel.textAlignment = NSTextAlignmentRight;
+    _progressTipLabel.textColor = UIColor.whiteColor;
+    _progressTipLabel.font = [UIFont systemFontOfSize:10];
+    _progressTipLabel.frame = CGRectMake(self.view.frame.size.width - 120, bottom - 100, 100, 10);
+    _progressTipLabel.text = @"00:00/00:00";
+    [self.view addSubview:_progressTipLabel];
+
     UIButton *btnDelete = [[SmallButton alloc] initWithFrame:CGRectMake(0, 0, BUTTON_CONTROL_SIZE, BUTTON_CONTROL_SIZE)];
     btnDelete.center = CGPointMake(self.view.frame.size.width / 4, bottom - BUTTON_CONTROL_SIZE - 5);
     [btnDelete setImage:[UIImage imageNamed:@"delete"] forState:UIControlStateNormal];
     [btnDelete setImage:[UIImage imageNamed:@"delete_press"] forState:UIControlStateSelected];
     [btnDelete addTarget:self action:@selector(onBtnDeleteClicked) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:btnDelete];
-    
+
 #ifndef UGC_SMART
     if (_showEditButton) {
         UIButton *btnEdit = [[SmallButton alloc] initWithFrame:CGRectMake(0, 0, BUTTON_CONTROL_SIZE, BUTTON_CONTROL_SIZE)];
@@ -203,47 +225,30 @@
         [self.view addSubview:btnEdit];
     }
 #endif
-    
+
     UIButton *btnDownload = [[SmallButton alloc] initWithFrame:CGRectMake(0, 0, BUTTON_CONTROL_SIZE, BUTTON_CONTROL_SIZE)];
     btnDownload.center = CGPointMake(self.view.frame.size.width * 3 / 4, bottom - BUTTON_CONTROL_SIZE - 5);
     [btnDownload setImage:[UIImage imageNamed:@"download"] forState:UIControlStateNormal];
     [btnDownload setImage:[UIImage imageNamed:@"download_press"] forState:UIControlStateSelected];
     [btnDownload addTarget:self action:@selector(onBtnDownloadClicked) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:btnDownload];
-    
+
     //    UIButton *btnShare = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, BUTTON_CONTROL_SIZE, BUTTON_CONTROL_SIZE)];
     //    btnShare.center = CGPointMake(self.view.frame.size.width * 3 / 4, self.view.frame.size.height - BUTTON_CONTROL_SIZE - 5);
     //    [btnShare setImage:[UIImage imageNamed:@"shareex"] forState:UIControlStateNormal];
     //    [btnShare setImage:[UIImage imageNamed:@"shareex_press"] forState:UIControlStateSelected];
     //    [btnShare addTarget:self action:@selector(onBtnShareClicked) forControlEvents:UIControlEventTouchUpInside];
     //    [self.view addSubview:btnShare];
-    
-    _sdPreviewSlider = [[UISlider alloc] init];
-    _sdPreviewSlider.frame = CGRectMake(0, 0, self.view.frame.size.width - 40, 60);
-    _sdPreviewSlider.center = CGPointMake(self.view.frame.size.width / 2, bottom - 80);
-    [_sdPreviewSlider setThumbImage:[UIImage imageNamed:@"slider"] forState:UIControlStateNormal];
-    [_sdPreviewSlider setMinimumTrackImage:[UIImage imageNamed:@"green"] forState:UIControlStateNormal];
-    [_sdPreviewSlider setMaximumTrackImage:[UIImage imageNamed:@"gray"] forState:UIControlStateNormal];
-    [_sdPreviewSlider addTarget:self action:@selector(onDragEnd:) forControlEvents:UIControlEventTouchUpInside];
-    [_sdPreviewSlider addTarget:self action:@selector(onDragStart:) forControlEvents:UIControlEventTouchDown];
-    [self.view addSubview:_sdPreviewSlider];
-    
-    _progressTipLabel = [UILabel new];
-    _progressTipLabel.textAlignment = NSTextAlignmentRight;
-    _progressTipLabel.textColor = UIColor.whiteColor;
-    _progressTipLabel.font = [UIFont systemFontOfSize:10];
-    _progressTipLabel.frame = CGRectMake(self.view.frame.size.width - 120, bottom - 100, 100, 10);
-    _progressTipLabel.text = @"00:00/00:00";
-    [self.view addSubview:_progressTipLabel];
 }
 
 -(void)onBtnPopBack
 {
-    [self dismissViewControllerAnimated:YES completion:nil];
+    [self _goBack];
 }
 
 -(void)onBtnPreviewStartClicked
 {
+    _sdPreviewSlider.enabled = YES;
     if (!_startPlay) {
         [self startVideoPreview:YES];
         _startPlay = YES;
@@ -273,19 +278,28 @@
 
 -(void)onBtnDownloadClicked
 {
-    ALAssetsLibrary *library = [[ALAssetsLibrary alloc] init];
-    [library writeVideoAtPathToSavedPhotosAlbum:[NSURL fileURLWithPath:_videoPath] completionBlock:^(NSURL *assetURL, NSError *error) {
-        if (error != nil) {
+    [PhotoUtil saveAssetToAlbum:[NSURL fileURLWithPath:_videoPath]
+                          completion:^(BOOL success, NSError * _Nullable error) {
+        if (!success) {
             NSLog(@"save video fail:%@", error);
         }
     }];
-    [self dismissViewControllerAnimated:YES completion:nil];
+    [self _goBack];
 }
 
 -(void)onBtnDeleteClicked
 {
     [[NSFileManager defaultManager] removeItemAtPath:_videoPath error:nil];
-    [self dismissViewControllerAnimated:YES completion:nil];
+    [self _goBack];
+}
+
+- (void)_goBack {
+    UINavigationController *nav = self.navigationController;
+    if (nav.presentingViewController) {
+        [nav.presentingViewController dismissViewControllerAnimated:YES completion:nil];
+    } else {
+        [nav popToRootViewControllerAnimated:YES];
+    }
 }
 
 -(void)onBtnShareClicked
@@ -307,7 +321,7 @@
 {
     NSLog(@"onDragEnd:%f", sender.value);
     if (_sdPreviewSlider.maximumValue > 5.0) {
-        [_voidPlayer seek:sender.value];
+        [_vodPlayer seek:sender.value];
     }
 }
 
@@ -334,7 +348,7 @@
             //           [self stopVideoPreview:YES];
             //           [self startVideoPreview:YES];
             //           [_livePlayer startPlay:_videoPath type:PLAY_TYPE_LOCAL_VIDEO];
-            [_voidPlayer resume];
+            [_vodPlayer resume];
             
             [_btnStartPreview setImage:[UIImage imageNamed:@"pausepreview"] forState:UIControlStateNormal];
             [_btnStartPreview setImage:[UIImage imageNamed:@"pausepreview_press"] forState:UIControlStateSelected];

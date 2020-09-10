@@ -89,14 +89,15 @@
     CFStringRef requestBody = CFSTR("");
     CFDataRef bodyData = CFStringCreateExternalRepresentation(kCFAllocatorDefault, requestBody, kCFStringEncodingUTF8, 0);
     if (curRequest.HTTPBody) {
+        if (bodyData) CFRelease(bodyData);
         bodyData = (__bridge_retained CFDataRef) curRequest.HTTPBody;
     } else if (headFields[@"originalBody"]) {
         // 使用NSURLSession发POST请求时，将原始HTTPBody从header中取出
+        if (bodyData) CFRelease(bodyData);
         bodyData = (__bridge_retained CFDataRef) [headFields[@"originalBody"] dataUsingEncoding:NSUTF8StringEncoding];
     }
     
-    CFStringRef url = (__bridge CFStringRef) [curRequest.URL absoluteString];
-    CFURLRef requestURL = CFURLCreateWithString(kCFAllocatorDefault, url, NULL);
+    CFURLRef requestURL = CFURLCreateWithString(kCFAllocatorDefault, (__bridge CFStringRef)(curRequest.URL.absoluteString), NULL);
     
     // 原请求所使用的方法，GET或POST
     CFStringRef requestMethod = (__bridge_retained CFStringRef) curRequest.HTTPMethod;
@@ -140,7 +141,6 @@
     
     CFRelease(cfrequest);
     CFRelease(requestURL);
-    CFRelease(url);
     cfrequest = NULL;
     CFRelease(bodyData);
     CFRelease(requestBody);
@@ -156,7 +156,7 @@
     CFHTTPMessageRef message = (CFHTTPMessageRef) CFReadStreamCopyProperty(readStream, kCFStreamPropertyHTTPResponseHeader);
     if (CFHTTPMessageIsHeaderComplete(message)) {
         // 确保response头部信息完整
-        NSDictionary *headDict = (__bridge NSDictionary *) (CFHTTPMessageCopyAllHeaderFields(message));
+        NSDictionary *headDict = (__bridge_transfer NSDictionary *) (CFHTTPMessageCopyAllHeaderFields(message));
         
         // 获取响应头部的状态码
         CFIndex myErrCode = CFHTTPMessageGetResponseStatusCode(message);
@@ -190,7 +190,8 @@
             // [self.client URLProtocol:self wasRedirectedToRequest:curRequest redirectResponse:response];
             
             // 内部处理，将url中的host通过HTTPDNS转换为IP，不能在startLoading线程中进行同步网络请求，会被阻塞
-            NSString *ip = [[TXUGCPublishOptCenter shareInstance] query:url.host];
+            NSArray *ipLists = [[TXUGCPublishOptCenter shareInstance] query:url.host];
+            NSString *ip = ([ipLists count] > 0 ? ipLists[0] : nil);
             if (ip) {
                 NSLog(@"Get IP from HTTPDNS Successfully!");
                 NSRange hostFirstRange = [location rangeOfString:url.host];
@@ -212,6 +213,7 @@
         [inputStream close];
         [self.client URLProtocolDidFinishLoading:self];
     }
+    if (NULL != message) CFRelease(message);
 }
 
 #pragma mark - NSStreamDelegate
@@ -229,14 +231,14 @@
             unsigned long length = 0;
             NSInputStream *inputstream = (NSInputStream *) aStream;
             NSNumber *alreadyAdded = objc_getAssociatedObject(aStream, kAnchorAlreadyAdded);
-            NSDictionary *headDict = (__bridge NSDictionary *) (CFHTTPMessageCopyAllHeaderFields(message));
+            NSDictionary *headDict = (__bridge_transfer NSDictionary *) (CFHTTPMessageCopyAllHeaderFields(message));
             if (!alreadyAdded || ![alreadyAdded boolValue]) {
                 objc_setAssociatedObject(aStream, kAnchorAlreadyAdded, [NSNumber numberWithBool:YES], OBJC_ASSOCIATION_COPY);
                 // 通知client已收到response，只通知一次
                 CFStringRef httpVersion = CFHTTPMessageCopyVersion(message);
                 // 获取响应头部的状态码
                 CFIndex myErrCode = CFHTTPMessageGetResponseStatusCode(message);
-                NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc] initWithURL:curRequest.URL statusCode:myErrCode HTTPVersion:(__bridge NSString *) httpVersion headerFields:headDict];
+                NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc] initWithURL:curRequest.URL statusCode:myErrCode HTTPVersion:(__bridge_transfer NSString *) httpVersion headerFields:headDict];
                 
                 [self.client URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed];
                 
@@ -299,6 +301,7 @@
                 }
             }
         }
+        if (NULL != message) CFRelease(message);
     } else if (eventCode == NSStreamEventErrorOccurred) {
         [aStream removeFromRunLoop:curRunLoop forMode:NSRunLoopCommonModes];
         [aStream setDelegate:nil];

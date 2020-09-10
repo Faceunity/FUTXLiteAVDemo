@@ -7,7 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
+#import "TXLiveSDKTypeDef.h"
 #import "TXLivePlayListener.h"
 #import "TXLivePlayConfig.h"
 #import "TXVideoCustomProcessDelegate.h"
@@ -57,7 +57,7 @@ typedef NS_ENUM(NSInteger, TX_Enum_PlayType) {
  * @param idx   Widget在父view上的层级位置
  * @discussion 变更历史：1.5.2版本将参数frame废弃，设置此参数无效，控件大小与参数view的大小保持一致，如需修改控件的大小及位置，请调整父view的大小及位置. 参考文档：https://www.qcloud.com/doc/api/258/4736#step-3.3A-.E7.BB.91.E5.AE.9A.E6.B8.B2.E6.9F.93.E7.95.8C.E9.9D.A2
  */
-- (void)setupVideoWidget:(CGRect)frame containView:(UIView *)view insertIndex:(unsigned int)idx;
+- (void)setupVideoWidget:(CGRect)frame containView:(TXView *)view insertIndex:(unsigned int)idx;
 
 /* 修改VideoWidget frame
  * 变更历史：1.5.2版本将此方法废弃，调用此方法无效，如需修改控件的大小及位置，请调整父view的大小及位置
@@ -74,7 +74,7 @@ typedef NS_ENUM(NSInteger, TX_Enum_PlayType) {
 /**
  * 启动从指定URL播放RTMP音视频流
  * @param url 完整的URL(如果播放的是本地视频文件，这里传本地视频文件的完整路径)
- * @prarm playType 播放类型
+ * @param playType 播放类型
  * @return 0 = OK
  */
 - (int)startPlay:(NSString *)url type:(TX_Enum_PlayType)playType;
@@ -107,7 +107,7 @@ typedef NS_ENUM(NSInteger, TX_Enum_PlayType) {
  @ @param domain 时移域名
  * @param bizId 流bizId
  * @return 0 = OK，-1 = 无播放地址,-2 = appId未配置
- * @discussion 使用时移功能需在播放开始后调用此方法，否者时移失败。时移的使用请参考文档 https://cloud.tencent.com/document/product/266/9237
+ * @discussion 使用时移功能需在播放开始后调用此方法，否则时移失败。时移的使用请参考文档 https://cloud.tencent.com/document/product/266/9237
  * @warning 非腾讯云直播地址不能时移
  */
 - (int)prepareLiveSeek:(NSString*)domain bizId:(NSInteger)bizId;
@@ -163,7 +163,7 @@ typedef NS_ENUM(NSInteger, TX_Enum_PlayType) {
  * 截屏
  * @param snapshotCompletionBlock 通过回调返回当前图像
  */
-- (void)snapshot:(void (^)(UIImage *))snapshotCompletionBlock;
+- (void)snapshot:(void (^)(TXImage *))snapshotCompletionBlock;
 
 /**
  * 设置播放速率
@@ -173,19 +173,19 @@ typedef NS_ENUM(NSInteger, TX_Enum_PlayType) {
 
 /**
  * 设置状态浮层view在渲染view上的边距
- * @prarm margin 边距
+ * @param margin 边距
  */
-- (void)setLogViewMargin:(UIEdgeInsets)margin;
+- (void)setLogViewMargin:(TXEdgeInsets)margin;
 
 /**
  * 是否显示播放状态统计及事件消息浮层view
- * @prarm isShow 是否显示
+ * @param isShow 是否显示
  */
 - (void)showVideoDebugLog:(BOOL)isShow;
 
 /**
  * 设置声音播放模式(切换扬声器，听筒)
- * @prarm audioRoute 声音播放模式
+ * @param audioRoute 声音播放模式
  */
 + (void)setAudioRoute:(TXAudioRouteType)audioRoute;
 

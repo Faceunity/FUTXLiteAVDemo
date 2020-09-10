@@ -20,7 +20,7 @@
 // annidy
 
 typedef enum : NSUInteger {
-    Help_美女直播,
+    Help_MLVBLiveRoom,
     Help_录屏直播,
     Help_超级播放器,
     Help_视频录制,
@@ -34,6 +34,7 @@ typedef enum : NSUInteger {
     Help_直播播放器,
     Help_点播播放器,
     Help_webrtc,
+    Help_TRTC,
 } HelpTitle;
 
 #define  HelpBtnUI(NAME) \

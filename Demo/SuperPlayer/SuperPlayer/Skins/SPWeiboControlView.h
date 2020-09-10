@@ -19,7 +19,7 @@
 /** 全屏按钮 */
 @property (nonatomic, strong) UIButton                *fullScreenBtn;
 /** 滑杆 */
-@property (nonatomic, strong) PlayerSlider     *videoSlider;
+@property (nonatomic, strong) PlayerSlider            *videoSlider;
 
 @property (nonatomic, strong) UIButton                *moreBtn;
 
@@ -35,6 +35,6 @@
 /** 分辨率的View */
 @property (nonatomic, strong) UIView                  *resolutionView;
 /** 更多设置View */
-@property (nonatomic, strong) MoreContentView         *moreContentView;
-@property BOOL isLive;
+@property (nonatomic, strong) SuperPlayerSettingsView         *moreContentView;
+@property (nonatomic, strong) UIButton               *pointJumpBtn;
 @end
