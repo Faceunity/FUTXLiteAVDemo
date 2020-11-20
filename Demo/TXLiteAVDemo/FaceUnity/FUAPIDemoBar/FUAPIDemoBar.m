@@ -169,7 +169,6 @@
 
 
 - (IBAction)bottomBtnsSelected:(UIButton *)sender {
-    
     if (sender.selected) {
         sender.selected = NO ;
         [self hiddenTopViewWithAnimation:YES];
@@ -225,7 +224,7 @@
     if (self.makeupBtn.selected) {
         NSInteger selectedIndex = self.makeupView.selectedIndex ;
         self.makeupView.type = FUFilterSliderType01 ;
-        self.beautySlider.hidden = selectedIndex < 0;
+        self.beautySlider.hidden = selectedIndex <= 0;
         if (selectedIndex >= 0) {
             FUBeautyParam *modle = self.makeupView.filters[selectedIndex];
             _seletedParam = modle;
@@ -335,7 +334,7 @@
     _seletedParam = param;
     self.beautySlider.hidden = YES;
 
-    if(param.type == FUDataTypeFilter&& _beautyFilterView.selectedIndex >= 0){
+    if(param.type == FUDataTypeFilter&& _beautyFilterView.selectedIndex > 0){
                 self.beautySlider.value = param.mValue;
         self.beautySlider.hidden = NO;
     }

@@ -17,10 +17,12 @@
 #import "LiveRoomListViewController.h"
 #import "LiveRoomAccPlayerView.h"
 
-
 /**faceU */
 #import "FUManager.h"
 #import "FUAPIDemoBar.h"
+#import "FUOpenGLView.h"
+#import "FUTestRecorder.h"
+
 
 typedef NS_ENUM(NSInteger, PKStatus) {
     PKStatus_IDLE,         // 空闲状态
@@ -35,7 +37,7 @@ typedef NS_ENUM(NSInteger, PKStatus) {
                 UITableViewDataSource,
                 FUAPIDemoBarDelegate
                 > {
-    UIView                   *_pusherView;
+    FUOpenGLView             *_pusherView;
     NSMutableDictionary      *_playerViewDic;  // 小主播的画面，[userID, view]
     
     TCBeautyPanel       *_vBeauty;  // 美颜界面组件
@@ -94,17 +96,19 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     _appIsBackground = NO;
     _hasPendingRequest = NO;
     
-    [_liveRoom setMirror:NO];
     [self initUI];
     [self initRoomLogic];
+    
+    [[FUTestRecorder shareRecorder] setupRecord];
     
     /**faceU */
     [[FUManager shareManager] loadFilter];
     [FUManager shareManager].isRender = YES;
+    [FUManager shareManager].showFaceUnityEffect = YES;
     [FUManager shareManager].flipx = YES;
     [FUManager shareManager].trackFlipx = YES;
     [self.view addSubview:self.demoBar];
-    [FUManager shareManager].showFaceUnityEffect = YES ;
+   
     
 }
 
@@ -189,10 +193,6 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     
     // 美颜初始化为默认值
     [_vBeauty resetAndApplyValues];
-    
-    /**faceU */
-    [FUManager shareManager].flipx = YES;
-    [FUManager shareManager].trackFlipx = YES;
     
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
@@ -353,7 +353,7 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     _toastView.selectable = NO;
     
     // 开启推流和本地预览
-    _pusherView = [[UIView alloc] initWithFrame:self.view.frame];
+    _pusherView = [[FUOpenGLView alloc] initWithFrame:self.view.frame];
     [_pusherView setBackgroundColor:UIColorFromRGB(0x262626)];
     [self.view insertSubview:_pusherView atIndex:0];
     [_liveRoom startLocalPreview:YES view:_pusherView];
@@ -444,7 +444,7 @@ typedef NS_ENUM(NSInteger, PKStatus) {
                 [self presentViewController:controller animated:YES completion:nil];
             } else {
                 [self alertTips:@"创建直播间失败" msg:errMsg completion:^{
-                    [self.navigationController popViewControllerAnimated:YES];
+                    //[self.navigationController popViewControllerAnimated:YES];
                 }];
             }
         });
@@ -462,7 +462,12 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     _camera_switch = !_camera_switch;
     if (_liveRoom) {
         
-        [_liveRoom switchCamera];
+//        [_liveRoom switchCamera];
+    
+        [_liveRoom switchCameraWithIsFront:!_camera_switch];
+//        [[FUManager shareManager] onCameraChange];
+//        [FUManager shareManager].flipx = ![FUManager shareManager].flipx;
+//        [FUManager shareManager].trackFlipx = ![FUManager shareManager].trackFlipx;
         
     }
     [btn setImage:[UIImage imageNamed:(_camera_switch? @"camera2" : @"camera")] forState:UIControlStateNormal];
