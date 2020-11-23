@@ -1,0 +1,20 @@
+PODS:
+  - Nama (7.2.0)
+  - TXLiteAVSDK_Professional (8.0.9643)
+
+DEPENDENCIES:
+  - Nama (~> 7.2.0)
+  - TXLiteAVSDK_Professional (~> 8.0.9643)
+
+SPEC REPOS:
+  trunk:
+    - Nama
+    - TXLiteAVSDK_Professional
+
+SPEC CHECKSUMS:
+  Nama: 6513d06085933c8d13b1e6360f5c1ea6996f745b
+  TXLiteAVSDK_Professional: b8f032a8ac2af308df2851f159adba08676f7ba0
+
+PODFILE CHECKSUM: 5c149124a9a0ad328475b49e0108d2722cca347d
+
+COCOAPODS: 1.9.3

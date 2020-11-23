@@ -603,7 +603,7 @@
             break;
         case TRTCVideoSourceScreen:
             if (@available(iOS 11.0, *)) {
-                [self.trtc startScreenCapture:nil];
+                [self.trtc startScreenCaptureByReplaykit:nil appGroup:nil];
             }
             break;
     }

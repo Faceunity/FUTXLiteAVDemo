@@ -25,9 +25,6 @@ typedef NS_ENUM(NSUInteger, FUDataType) {
 
 @property (nonatomic,assign)float mValue;
 
-@property(nonatomic, copy) NSString *makeupBundle;
-
-
 /* 双向的参数  0.5是原始值*/
 @property (nonatomic,assign) BOOL iSStyle101;
 

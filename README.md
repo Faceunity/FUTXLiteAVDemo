@@ -8,37 +8,18 @@ FUTXLiteAVDemo 是集成了 [Faceunity](https://github.com/Faceunity/FULiveDemo/
 
 ### 一、导入 SDK
 
-将 FaceUnity 文件夹全部拖入工程中，并且添加依赖库 `OpenGLES.framework`、`Accelerate.framework`、`CoreMedia.framework`、`AVFoundation.framework`、`libc++.tbd`、`CoreML.framework`
+将  FaceUnity  文件夹全部拖入工程中，NamaSDK所需依赖库为 `OpenGLES.framework`、`Accelerate.framework`、`CoreMedia.framework`、`AVFoundation.framework`、`libc++.tbd`、`CoreML.framework`
+
+- 备注: 上述NamaSDK 依赖库使用 Pods 管理 会自动添加依赖,运行在iOS11以下系统时,需要手动添加`CoreML.framework`,并在**TARGETS -> Build Phases-> Link Binary With Libraries**将`CoreML.framework`手动修改为可选**Optional**
 
 ### FaceUnity 模块简介
 ```C
-+Helpers                //业务管理类文件夹
-    -FUManager              //nama 业务类
-    -FUCamera               //视频采集类 (本demo未用到)  
-+Lib                    //nama SDK  
-    -authpack.h             //权限文件
-    +libCNamaSDK.framework      
-        +Headers
-            -funama.h          //C 接口
-            -FURenderer.h      //OC 接口
-    +Resources
-        +model              //AI模型
-            -ai_face_processor.bundle      // 人脸识别AI能力模型，需要默认加载
-            -ai_face_processor_lite.bundle // 人脸识别AI能力模型，轻量版
-            -ai_gesture.bundle             // 手势识别AI能力模型
-            -ai_human_processor.bundle     // 人体点位AI能力模型
-        +graphics        //随库发版的重要模块资源
-            -body_slim.bundle              // 美体道具
-            -controller.bundle             // Avatar 道具
-            -face_beautification.bundle    // 美颜道具
-            -face_makeup.bundle            // 美妆道具
-            -fuzzytoonfilter.bundle        // 动漫滤镜道具
-            -fxaa.bundle                   // 3D 绘制抗锯齿
-            -tongue.bundle                 // 舌头跟踪数据包
-    +FUAPIDemoBar     //美颜工具条,可自定义
-    +道具贴纸         //道具贴纸 xx.bundel文件
-    + 美体            // 美体相关资源
-    +美妆          // 美妆 xx.bundel文件
+-FUManager              //nama 业务类
+-FUCamera               //视频采集类 (本demo未用到)   
+-authpack.h             //权限文件
++FUAPIDemoBar     //美颜工具条,可自定义
++item       //道具贴纸 xx.bundel文件
+
 ```
 
 ### 二、加入展示 FaceUnity SDK 美颜贴纸效果的UI
@@ -104,41 +85,30 @@ FUTXLiteAVDemo 是集成了 [Faceunity](https://github.com/Faceunity/FULiveDemo/
 ### 三、在 `viewDidLoad:` 中初始化 SDK  并将  demoBar 添加到页面上
 
 ```C
-/**faceU */
-[[FUManager shareManager] loadFilter];
-[FUManager shareManager].isRender = YES;
-[FUManager shareManager].flipx = YES;
-[FUManager shareManager].trackFlipx = YES;
-[self.view addSubview:self.demoBar];
-[FUManager shareManager].showFaceUnityEffect = YES ;
+    /**faceU */
+    [[FUManager shareManager] loadFilter];
+    [FUManager shareManager].isRender = YES;
+    [FUManager shareManager].showFaceUnityEffect = YES;
+    [FUManager shareManager].flipx = YES;
+    [FUManager shareManager].trackFlipx = YES;
+    [self.view addSubview:self.demoBar];
+   
     
 ```
 
 ### 四、视频数据处理
 
-1、在`MLVBLiveRoom.m` 中 初始化推流`initLivePusher`设置_livePusher的代理
-    
-```C
-// 增加此代理，拿到视频数据回调
-//TXVideoCustomProcessDelegate
-_livePusher.videoProcessDelegate = self ;
-
+使用FUCamera自采集 `在MLVBLiveRoom.m`,实现FUCameraDelegate的代理
 ```
-
-2、TXVideoCustomProcessDelegate方法中处理数据
-
-```C
-#pragma mark - 视频数据回调
-- (GLuint)onPreProcessTexture:(GLuint)texture width:(CGFloat)width height:(CGFloat)height {
+- (void)didOutputVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer{
     
-    if ([FUManager shareManager].showFaceUnityEffect) {
-        
-        texture = [[FUManager shareManager] renderItemWithTexture:texture Width:width Height:height];
-    }
+    [[FUTestRecorder shareRecorder] processFrameWithLog];
+    CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+    [[FUManager shareManager] renderItemsToPixelBuffer:pixelBuffer];
+    [self.glView displayPixelBuffer:pixelBuffer];
+    [_livePusher sendVideoSampleBuffer:sampleBuffer];
     
-    return texture ;
 }
-
 ```
 
 ### 五、销毁道具和切换摄像头
@@ -147,6 +117,6 @@ _livePusher.videoProcessDelegate = self ;
 
 2 切换摄像头需要调用 `[[FUManager shareManager] onCameraChange];`切换摄像头
 
-#### 关于 FaceUnity SDK 的更多详细说明，请参看 [FULiveDemo](https://github.com/Faceunity/FULiveDemo/tree/dev)
+### 关于 FaceUnity SDK 的更多详细说明，请参看 [FULiveDemo](https://github.com/Faceunity/FULiveDemo/tree/dev)
 
 

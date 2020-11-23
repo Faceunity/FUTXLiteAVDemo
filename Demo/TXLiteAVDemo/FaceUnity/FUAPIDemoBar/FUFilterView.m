@@ -17,8 +17,6 @@
 @implementation FUFilterView
 
 -(void)awakeFromNib{
-
-    [super awakeFromNib];
     self.backgroundColor = [UIColor clearColor];
     self.delegate = self;
     self.dataSource = self ;
@@ -81,10 +79,10 @@
 
 -(void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     
-    _selectedIndex = indexPath.item ;
+    _selectedIndex = indexPath.row ;
     [self reloadData];
     
-    FUBeautyParam *model = _filters[indexPath.item];
+    FUBeautyParam *model = _filters[indexPath.row];
     
     if (self.mDelegate && [self.mDelegate respondsToSelector:@selector(filterViewDidSelectedFilter:)]) {
         [self.mDelegate filterViewDidSelectedFilter:model];

@@ -37,8 +37,8 @@
     
     FUBeautyCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:@"FUBeautyCell" forIndexPath:indexPath];
     
-    if (indexPath.item < self.dataArray.count){
-        FUBeautyParam *modle = self.dataArray[indexPath.item] ;
+    if (indexPath.row < self.dataArray.count){
+        FUBeautyParam *modle = self.dataArray[indexPath.row] ;
         NSString *imageName ;
         
             BOOL opened = YES;
@@ -50,7 +50,7 @@
         }
         
         
-            BOOL selected = _selectedIndex == indexPath.item ;
+            BOOL selected = _selectedIndex == indexPath.row ;
             
             if (selected) {
                 imageName = opened ? [modle.mTitle stringByAppendingString:@"-3.png"] : [modle.mTitle stringByAppendingString:@"-2.png"] ;
@@ -60,7 +60,7 @@
 
         cell.imageView.image = [UIImage imageWithName:imageName];
         cell.titleLabel.text = NSLocalizedString(modle.mTitle,nil);
-        cell.titleLabel.textColor = _selectedIndex == indexPath.item ? [UIColor colorWithHexColorString:@"5EC7FE"] : [UIColor whiteColor];
+        cell.titleLabel.textColor = _selectedIndex == indexPath.row ? [UIColor colorWithHexColorString:@"5EC7FE"] : [UIColor whiteColor];
     }
     return cell ;
 }
@@ -68,11 +68,11 @@
 #pragma mark ---- UICollectionViewDelegate
 -(void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     
-    if (_selectedIndex == indexPath.item) {
+    if (_selectedIndex == indexPath.row) {
         return ;
     }
-    FUBeautyParam *model = _dataArray[indexPath.item];
-    _selectedIndex = indexPath.item ;
+    FUBeautyParam *model = _dataArray[indexPath.row];
+    _selectedIndex = indexPath.row ;
     
     [self reloadData];
     
