@@ -8,18 +8,32 @@ FUTXLiteAVDemo 是集成了 [Faceunity](https://github.com/Faceunity/FULiveDemo/
 
 ### 一、导入 SDK
 
-将  FaceUnity  文件夹全部拖入工程中，NamaSDK所需依赖库为 `OpenGLES.framework`、`Accelerate.framework`、`CoreMedia.framework`、`AVFoundation.framework`、`libc++.tbd`、`CoreML.framework`
-
-- 备注: 上述NamaSDK 依赖库使用 Pods 管理 会自动添加依赖,运行在iOS11以下系统时,需要手动添加`CoreML.framework`,并在**TARGETS -> Build Phases-> Link Binary With Libraries**将`CoreML.framework`手动修改为可选**Optional**
+将 FaceUnity 文件夹全部拖入工程中，并且添加依赖库 `OpenGLES.framework`、`Accelerate.framework`、`CoreMedia.framework`、`AVFoundation.framework`、`libc++.tbd`、`CoreML.framework`
 
 ### FaceUnity 模块简介
 ```C
--FUManager              //nama 业务类
--FUCamera               //视频采集类 (本demo未用到)   
--authpack.h             //权限文件
+-FUManager            //nama 业务类
++Lib                  //相芯SDK相关  
+    -authpack.h             //权限文件
+    -FURenderKit.framework  //FURenderKit动态库      
+    +Resources
+        +model              //AI模型
+            -ai_face_processor.bundle      // 人脸识别AI能力模型，需要默认加载
+            -ai_face_processor_lite.bundle // 人脸识别AI能力模型，轻量版
+            -ai_gesture.bundle             // 手势识别AI能力模型
+            -ai_human_processor.bundle     // 人体点位AI能力模型
+        +graphics        //随库发版的重要模块资源
+            -body_slim.bundle              // 美体道具
+            -controller.bundle             // Avatar 道具
+            -face_beautification.bundle    // 美颜道具
+            -face_makeup.bundle            // 美妆道具
+            -fuzzytoonfilter.bundle        // 动漫滤镜道具
+            -fxaa.bundle                   // 3D 绘制抗锯齿
+            -tongue.bundle                 // 舌头跟踪数据包
 +FUAPIDemoBar     //美颜工具条,可自定义
-+item       //道具贴纸 xx.bundel文件
-
++items         //道具资源 xx.bundel文件
+    +美妆         // 美妆 xx.bundle文件
+    +贴纸         // 贴纸 xx.bundle文件 
 ```
 
 ### 二、加入展示 FaceUnity SDK 美颜贴纸效果的UI
@@ -28,47 +42,30 @@ FUTXLiteAVDemo 是集成了 [Faceunity](https://github.com/Faceunity/FULiveDemo/
 
 ```C
 /**faceU */
-#import "FUManager.h"
-#import "FUAPIDemoBar.h"
-
-
-@property (nonatomic, strong) FUAPIDemoBar *demoBar ;
+#import "UIViewController+FaceUnityUIExtension.h"
 
 ```
 
-2、初始化 UI，并遵循代理  FUAPIDemoBarDelegate ，实现代理方法 `bottomDidChange:` 切换贴纸 和 `filterValueChange:` 更新美颜参数。
+2、在 `viewDidLoad` 中初始化 FaceUnity的界面和 SDK，FaceUnity界面工具和SDK都放在UIViewController+FaceUnityUIExtension中初始化了，也可以自行调用FUAPIDemoBar和FUManager初始化
 
-```C
-// demobar 初始化
--(FUAPIDemoBar *)demoBar {
-    if (!_demoBar) {
-        _demoBar = [[FUAPIDemoBar alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height - 194 - 60, self.view.frame.size.width, 194)];
-        
-        _demoBar.mDelegate = self;
-    }
-    return _demoBar ;
-}
-
+```objc
+[self setupFaceUnity];
 ```
 
-#### 切换贴纸
+#### 底部栏切换功能：使用不同的ViewModel控制
 
 ```C
-// 切换贴纸
--(void)bottomDidChange:(int)index{
-    if (index < 3) {
-        [[FUManager shareManager] setRenderType:FUDataTypeBeautify];
+-(void)bottomDidChangeViewModel:(FUBaseViewModel *)viewModel {
+    if (viewModel.type == FUDataTypeBeauty || viewModel.type == FUDataTypebody) {
+        self.renderSwitch.hidden = NO;
+    } else {
+        self.renderSwitch.hidden = YES;
     }
-    if (index == 3) {
-        [[FUManager shareManager] setRenderType:FUDataTypeStrick];
-    }
+
+    [[FUManager shareManager].viewModelManager addToRenderLoop:viewModel];
     
-    if (index == 4) {
-        [[FUManager shareManager] setRenderType:FUDataTypeMakeup];
-    }
-    if (index == 5) {
-        [[FUManager shareManager] setRenderType:FUDataTypebody];
-    }
+    // 设置人脸数
+    [[FUManager shareManager].viewModelManager resetMaxFacesNumber:viewModel.type];
 }
 
 ```
@@ -76,39 +73,54 @@ FUTXLiteAVDemo 是集成了 [Faceunity](https://github.com/Faceunity/FULiveDemo/
 #### 更新美颜参数
 
 ```C
-// 更新美颜参数    
-- (void)filterValueChange:(FUBeautyParam *)param{
-    [[FUManager shareManager] filterValueChange:param];
+- (IBAction)filterSliderValueChange:(FUSlider *)sender {
+    _seletedParam.mValue = @(sender.value * _seletedParam.ratio);
+    /**
+     * 这里使用抽象接口，有具体子类决定去哪个业务员模块处理数据
+     */
+    [self.selectedView.viewModel consumerWithData:_seletedParam viewModelBlock:nil];
 }
 ```
 
-### 三、在 `viewDidLoad:` 中初始化 SDK  并将  demoBar 添加到页面上
+### 三、视频数据处理
+
+1、在`MLVBLiveRoom.m` 中 初始化推流`initLivePusher`设置_livePusher的代理
+    
+```C
+// 增加此代理，拿到视频数据回调
+//TXVideoCustomProcessDelegate
+_livePusher.videoProcessDelegate = self ;
+
+```
+
+2、TXVideoCustomProcessDelegate方法中处理数据
 
 ```C
-    /**faceU */
-    [[FUManager shareManager] loadFilter];
-    [FUManager shareManager].isRender = YES;
-    [FUManager shareManager].showFaceUnityEffect = YES;
-    [FUManager shareManager].flipx = YES;
-    [FUManager shareManager].trackFlipx = YES;
-    [self.view addSubview:self.demoBar];
-   
-    
-```
+#pragma mark - 视频数据回调
+- (GLuint)onPreProcessTexture:(GLuint)texture width:(CGFloat)width height:(CGFloat)height {
 
-### 四、视频数据处理
-
-使用FUCamera自采集 `在MLVBLiveRoom.m`,实现FUCameraDelegate的代理
-```
-- (void)didOutputVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer{
+    if ([FUGLContext shareGLContext].currentGLContext != [EAGLContext currentContext]) {
+        [[FUGLContext shareGLContext] setCustomGLContext:[EAGLContext currentContext]];
+    }
+    FURenderInput *input = [[FURenderInput alloc] init];
+    input.renderConfig.imageOrientation = FUImageOrientationUP;
+    input.renderConfig.isFromFrontCamera = _livePusher.frontCamera;
+    input.renderConfig.isFromMirroredCamera =_livePusher.frontCamera;
+    input.renderConfig.stickerFlipH = YES;
+    FUTexture tex = {texture, CGSizeMake(width, height)};
+    input.texture = tex;
     
-    [[FUTestRecorder shareRecorder] processFrameWithLog];
-    CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-    [[FUManager shareManager] renderItemsToPixelBuffer:pixelBuffer];
-    [self.glView displayPixelBuffer:pixelBuffer];
-    [_livePusher sendVideoSampleBuffer:sampleBuffer];
+    //开启重力感应，内部会自动计算正确方向，设置fuSetDefaultRotationMode，无须外面设置
+    input.renderConfig.gravityEnable = YES;
+    input.renderConfig.textureTransform = CCROT0_FLIPVERTICAL;
     
+    FURenderOutput *output = [[FURenderKit shareRenderKit] renderWithInput:input];
+    if (output) {
+        return output.texture.ID;
+    }
+    return texture ;
 }
+
 ```
 
 ### 五、销毁道具和切换摄像头
@@ -117,6 +129,6 @@ FUTXLiteAVDemo 是集成了 [Faceunity](https://github.com/Faceunity/FULiveDemo/
 
 2 切换摄像头需要调用 `[[FUManager shareManager] onCameraChange];`切换摄像头
 
-### 关于 FaceUnity SDK 的更多详细说明，请参看 [FULiveDemo](https://github.com/Faceunity/FULiveDemo/tree/dev)
+#### 关于 FaceUnity SDK 的更多详细说明，请参看 [FULiveDemo](https://github.com/Faceunity/FULiveDemo/tree/dev)
 
 

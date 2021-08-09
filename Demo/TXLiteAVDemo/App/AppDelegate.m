@@ -97,11 +97,11 @@ NSString *helpUrlDb[] = {
     
     [Bugly startWithAppId:BUGLY_APP_ID config:config];
 #ifdef ENABLE_UGC
-    [TXUGCBase setLicenceURL:@"http://license.vod2.myqcloud.com/license/v1/e0a12d3564e40876abe197297a9fbf8d/TXLiveSDK.licence" key:@"8932c0e28b783976bdee2edcb625a6e1"];
+    [TXUGCBase setLicenceURL:@"http://license.vod2.myqcloud.com/license/v1/c9cd42c77c9b38b4a1218db1969788e1/TXLiveSDK.licence" key:@"e46e6dc6996bd42a9c2fc85945ebbabe"];
 #endif
     
 #ifdef ENABLE_PUSH
-    [TXLiveBase setLicenceURL:@"http://license.vod2.myqcloud.com/license/v1/e0a12d3564e40876abe197297a9fbf8d/TXLiveSDK.licence" key:@"8932c0e28b783976bdee2edcb625a6e1"];
+    [TXLiveBase setLicenceURL:@"http://license.vod2.myqcloud.com/license/v1/c9cd42c77c9b38b4a1218db1969788e1/TXLiveSDK.licence" key:@"e46e6dc6996bd42a9c2fc85945ebbabe"];
     
     NSLog(@"TXLiveBaseVersion = %@",[TXLiveBase getSDKVersionStr]);
     

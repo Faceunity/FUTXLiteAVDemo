@@ -419,9 +419,6 @@
  */
 - (void)switchCamera;
 
-- (void)switchCameraWithIsFront:(BOOL)isFront;
-
-
 /**
  * 主播屏蔽摄像头期间需要显示的等待图片
  *

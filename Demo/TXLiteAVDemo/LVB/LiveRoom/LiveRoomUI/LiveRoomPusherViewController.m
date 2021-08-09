@@ -18,10 +18,7 @@
 #import "LiveRoomAccPlayerView.h"
 
 /**faceU */
-#import "FUManager.h"
-#import "FUAPIDemoBar.h"
-#import "FUOpenGLView.h"
-#import "FUTestRecorder.h"
+#import "UIViewController+FaceUnityUIExtension.h"
 
 
 typedef NS_ENUM(NSInteger, PKStatus) {
@@ -34,10 +31,9 @@ typedef NS_ENUM(NSInteger, PKStatus) {
                 MLVBLiveRoomDelegate,
                 UITextFieldDelegate,
                 UITableViewDelegate,
-                UITableViewDataSource,
-                FUAPIDemoBarDelegate
+                UITableViewDataSource
                 > {
-    FUOpenGLView             *_pusherView;
+    UIView                   *_pusherView;
     NSMutableDictionary      *_playerViewDic;  // 小主播的画面，[userID, view]
     
     TCBeautyPanel       *_vBeauty;  // 美颜界面组件
@@ -76,9 +72,6 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     UITableView              *_roomCreatorListView; // 用于展示主播列表
 }
 
-/**faceU */
-@property (nonatomic, strong) FUAPIDemoBar *demoBar ;
-
 @property (strong, nonatomic) MLVBAnchorInfo *pkAnchor;
 
 
@@ -99,16 +92,8 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     [self initUI];
     [self initRoomLogic];
     
-    [[FUTestRecorder shareRecorder] setupRecord];
-    
     /**faceU */
-    [[FUManager shareManager] loadFilter];
-    [FUManager shareManager].isRender = YES;
-    [FUManager shareManager].showFaceUnityEffect = YES;
-    [FUManager shareManager].flipx = YES;
-    [FUManager shareManager].trackFlipx = YES;
-    [self.view addSubview:self.demoBar];
-   
+    [self setupFaceUnity];
     
 }
 
@@ -119,44 +104,6 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     self.navigationController.interactivePopGestureRecognizer.enabled = NO;
     
 }
-
-
--(FUAPIDemoBar *)demoBar {
-    if (!_demoBar) {
-        _demoBar = [[FUAPIDemoBar alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height - 194 - 60, self.view.frame.size.width, 194)];
-        
-        _demoBar.mDelegate = self;
-    }
-    return _demoBar ;
-}
-
-/**      FUAPIDemoBarDelegate       **/
-
--(void)filterValueChange:(FUBeautyParam *)param{
-    [[FUManager shareManager] filterValueChange:param];
-}
-
--(void)switchRenderState:(BOOL)state{
-    [FUManager shareManager].isRender = state;
-}
-
--(void)bottomDidChange:(int)index{
-    if (index < 3) {
-        [[FUManager shareManager] setRenderType:FUDataTypeBeautify];
-    }
-    if (index == 3) {
-        [[FUManager shareManager] setRenderType:FUDataTypeStrick];
-    }
-    
-    if (index == 4) {
-        [[FUManager shareManager] setRenderType:FUDataTypeMakeup];
-    }
-    if (index == 5) {
-        [[FUManager shareManager] setRenderType:FUDataTypebody];
-    }
-}
-
-
 
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -353,7 +300,7 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     _toastView.selectable = NO;
     
     // 开启推流和本地预览
-    _pusherView = [[FUOpenGLView alloc] initWithFrame:self.view.frame];
+    _pusherView = [[UIView alloc] initWithFrame:self.view.frame];
     [_pusherView setBackgroundColor:UIColorFromRGB(0x262626)];
     [self.view insertSubview:_pusherView atIndex:0];
     [_liveRoom startLocalPreview:YES view:_pusherView];
@@ -444,7 +391,7 @@ typedef NS_ENUM(NSInteger, PKStatus) {
                 [self presentViewController:controller animated:YES completion:nil];
             } else {
                 [self alertTips:@"创建直播间失败" msg:errMsg completion:^{
-                    //[self.navigationController popViewControllerAnimated:YES];
+                    [self.navigationController popViewControllerAnimated:YES];
                 }];
             }
         });
@@ -462,12 +409,7 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     _camera_switch = !_camera_switch;
     if (_liveRoom) {
         
-//        [_liveRoom switchCamera];
-    
-        [_liveRoom switchCameraWithIsFront:!_camera_switch];
-//        [[FUManager shareManager] onCameraChange];
-//        [FUManager shareManager].flipx = ![FUManager shareManager].flipx;
-//        [FUManager shareManager].trackFlipx = ![FUManager shareManager].trackFlipx;
+        [_liveRoom switchCamera];
         
     }
     [btn setImage:[UIImage imageNamed:(_camera_switch? @"camera2" : @"camera")] forState:UIControlStateNormal];
