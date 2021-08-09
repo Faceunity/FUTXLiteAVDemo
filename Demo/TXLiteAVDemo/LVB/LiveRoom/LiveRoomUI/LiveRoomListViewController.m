@@ -58,7 +58,7 @@ static NSString * const kAPPID = @"1252463788";
     _liveRoom = [MLVBLiveRoom sharedInstance];
     [_liveRoom setCameraMuteImage:[UIImage imageNamed:@"pause_publish.jpg"]];
     _liveRoom.delegate = self;
-    [_liveRoom setMirror:NO];
+    [_liveRoom setMirror:YES];
     
     _roomInfoArray = [[NSArray alloc] init];
     _userNameArray = [[NSArray alloc] initWithObjects:@"李元芳", @"刘备", @"梦奇", @"王昭君", @"周瑜", @"鲁班", @"后裔", @"安其拉", @"亚瑟", @"曹操",

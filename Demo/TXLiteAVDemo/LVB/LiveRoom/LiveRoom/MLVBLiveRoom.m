@@ -17,9 +17,7 @@
 
 /**faceU */
 #import "FUManager.h"
-#import "FUCamera.h"
-#import "FUOpenGLView.h"
-#import "FUTestRecorder.h"
+#import <FURenderKit/FUGLContext.h>
 
 
 @interface MLVBProxy : NSProxy {
@@ -65,7 +63,7 @@ static const NSTimeInterval JoinAnchorRequestTimeout = 10;
 /// PK请求超时等待时间
 static const NSTimeInterval PKRequestTimeout = 10;
 
-@interface MLVBLiveRoom() <TXLivePushListener, IRoomLivePlayListener, IMMsgManagerDelegate,TXVideoCustomProcessDelegate,FUCameraDelegate> {
+@interface MLVBLiveRoom() <TXLivePushListener, IRoomLivePlayListener, IMMsgManagerDelegate,TXVideoCustomProcessDelegate> {
     TXLivePush              *_livePusher;
     NSMutableDictionary<NSString *, RoomLivePlayerWrapper*> *_playerWrapperDic; // [userID, RoomLivePlayerWrapper]
     NSArray<MLVBRoomInfo *>     *_roomList;      // 保存最近一次拉回的房间列表，这里仅仅使用里面的房间混流地址和创建者信息
@@ -101,13 +99,6 @@ static const NSTimeInterval PKRequestTimeout = 10;
 /// 注意这个RoomInfo里面的anchorInfoArray不包含自己
 @property (nonatomic, strong) MLVBRoomInfo *roomInfo;
 @property (nonatomic, copy) NSString *roomCreatorPlayerURL;
-
-/// 自定义采集摄像头
-@property(nonatomic, strong) FUCamera *mCamera;
-
-@property(nonatomic, strong) FUOpenGLView *glView;
-
-
 @end
 
 static MLVBProxy *sharedInstance = nil;
@@ -116,27 +107,29 @@ static pthread_mutex_t sharedInstanceLock;
 @implementation MLVBLiveRoom
 
 #pragma mark - 视频数据回调
-//- (GLuint)onPreProcessTexture:(GLuint)texture width:(CGFloat)width height:(CGFloat)height {
-//
-//    [[FUTestRecorder shareRecorder] processFrameWithLog];
-//    if ([FUManager shareManager].showFaceUnityEffect) {
-//
-//        texture = [[FUManager shareManager] renderItemWithTexture:texture Width:width Height:height];
-//    }
-//
-//    return texture ;
-//}
+- (GLuint)onPreProcessTexture:(GLuint)texture width:(CGFloat)width height:(CGFloat)height {
 
-- (void)didOutputVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer{
+    if ([FUGLContext shareGLContext].currentGLContext != [EAGLContext currentContext]) {
+        [[FUGLContext shareGLContext] setCustomGLContext:[EAGLContext currentContext]];
+    }
+    FURenderInput *input = [[FURenderInput alloc] init];
+    input.renderConfig.imageOrientation = FUImageOrientationUP;
+    input.renderConfig.isFromFrontCamera = _livePusher.frontCamera;
+    input.renderConfig.isFromMirroredCamera =_livePusher.frontCamera;
+    input.renderConfig.stickerFlipH = YES;
+    FUTexture tex = {texture, CGSizeMake(width, height)};
+    input.texture = tex;
     
-    [[FUTestRecorder shareRecorder] processFrameWithLog];
-    CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-    [[FUManager shareManager] renderItemsToPixelBuffer:pixelBuffer];
-    [self.glView displayPixelBuffer:pixelBuffer];
-    [_livePusher sendVideoSampleBuffer:sampleBuffer];
+    //开启重力感应，内部会自动计算正确方向，设置fuSetDefaultRotationMode，无须外面设置
+    input.renderConfig.gravityEnable = YES;
+    input.renderConfig.textureTransform = CCROT0_FLIPVERTICAL;
     
+    FURenderOutput *output = [[FURenderKit shareRenderKit] renderWithInput:input];
+    if (output) {
+        return output.texture.ID;
+    }
+    return texture ;
 }
-
 
 + (void)load {
     pthread_mutex_init(&sharedInstanceLock, NULL);
@@ -169,11 +162,6 @@ static pthread_mutex_t sharedInstanceLock;
     if (self = [super init]) {
         _serverDomain = ServerAddr;
         [self initLivePusher];
-        
-        _mCamera = [[FUCamera alloc] init];
-        _mCamera.delegate = self;
-        [_mCamera changeSessionPreset:AVCaptureSessionPreset1280x720];
-        
         _playerWrapperDic = [[NSMutableDictionary alloc] init];
         _delegateQueue = dispatch_get_main_queue();
         _roomInfo = [[MLVBRoomInfo alloc] init];
@@ -206,20 +194,17 @@ static pthread_mutex_t sharedInstanceLock;
         config.localVideoMirrorType = LocalVideoMirrorType_Auto;
         config.pauseImg = [UIImage imageNamed:@"pause_publish.jpg"];
         config.homeOrientation = HOME_ORIENTATION_DOWN;
-        config.videoResolution = VIDEO_RESOLUTION_TYPE_720_1280;
-        config.videoBitrateMax = 1800;
+        config.videoResolution = VIDEO_RESOLUTION_TYPE_540_960;
+        config.videoBitrateMax = 1200;
         config.videoFPS = 30;
-        config.customModeType = CUSTOM_MODE_VIDEO_CAPTURE;
-        config.autoSampleBufferSize = YES;
         _videoQuality = VIDEO_QUALITY_HIGH_DEFINITION;
         _livePusher = [[TXLivePush alloc] initWithConfig:config];
         _livePusher.delegate = self;
         
         // 增加此代理，拿到视频数据回调
-        
-//        _livePusher.videoProcessDelegate = self;
+        _livePusher.videoProcessDelegate = self ;
         [_livePusher setLogViewMargin:UIEdgeInsetsMake(120, 10, 60, 10)];
-   
+        
     }
 }
 
@@ -227,7 +212,6 @@ static pthread_mutex_t sharedInstanceLock;
 {
     NSLog(@"------销毁");
     
-    [[FUManager shareManager] destoryItems];
     [_msgMgr prepareToDealloc];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_httpSession invalidateSessionCancelingTasks:NO];
@@ -938,22 +922,14 @@ static pthread_mutex_t sharedInstanceLock;
     if (_livePusher.frontCamera != frontCamera) {
         [_livePusher switchCamera];
     }
-//    [_livePusher startPreview:view];
-    
-    self.glView = (FUOpenGLView *)view;
-    [_mCamera startCapture];
-    
+    [_livePusher startPreview:view];
 }
 
 - (void)stopLocalPreview {
     [[FUManager shareManager] destoryItems];
-//    [_livePusher stopPreview];
-    [self.mCamera resetFocusAndExposureModes];
-    [self.mCamera stopCapture];
+    [_livePusher stopPreview];
     [_livePusher stopPush];
     [self releaseLivePusher];
-    self.glView = nil;
-    
 }
 
 // 播放小主播、PK
@@ -1058,19 +1034,13 @@ static pthread_mutex_t sharedInstanceLock;
 }
 #pragma mark - 摄像头相关接口函数
 - (void)switchCamera {
-    
     [_livePusher switchCamera];
     
-}
-
-
-/// 自采集切换摄像头
-/// @param isFront 是否是前置
-- (void)switchCameraWithIsFront:(BOOL)isFront{
-
-    [self.mCamera changeCameraInputDeviceisFront:isFront];
+    [self setMirror:_livePusher.frontCamera];
+    
     [[FUManager shareManager] onCameraChange];
 }
+
 
 - (void)setZoom:(CGFloat)distance {
     [_livePusher setZoom:distance];
@@ -1324,7 +1294,7 @@ typedef void (^ILoginCompletionCallback)(int errCode, NSString *errMsg, NSString
             [strongSelf sendHeartBeat];
         }
     });
-    dispatch_source_set_timer(_heartBeatTimer, dispatch_walltime(NULL, 0), 15 * NSEC_PER_SEC, 0);
+    dispatch_source_set_timer(_heartBeatTimer, dispatch_walltime(NULL, 0), 7 * NSEC_PER_SEC, 0);
     dispatch_resume(_heartBeatTimer);
 }
 
