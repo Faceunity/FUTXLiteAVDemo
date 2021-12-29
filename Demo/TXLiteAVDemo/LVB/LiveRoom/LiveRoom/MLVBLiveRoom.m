@@ -18,6 +18,7 @@
 /**faceU */
 #import "FUManager.h"
 #import <FURenderKit/FUGLContext.h>
+#import "FUTestRecorder.h"
 
 
 @interface MLVBProxy : NSProxy {
@@ -108,14 +109,14 @@ static pthread_mutex_t sharedInstanceLock;
 
 #pragma mark - 视频数据回调
 - (GLuint)onPreProcessTexture:(GLuint)texture width:(CGFloat)width height:(CGFloat)height {
-
+    
+    [[FUTestRecorder shareRecorder] processFrameWithLog];
     if ([FUGLContext shareGLContext].currentGLContext != [EAGLContext currentContext]) {
         [[FUGLContext shareGLContext] setCustomGLContext:[EAGLContext currentContext]];
     }
     FURenderInput *input = [[FURenderInput alloc] init];
-    input.renderConfig.imageOrientation = FUImageOrientationUP;
-    input.renderConfig.isFromFrontCamera = _livePusher.frontCamera;
-    input.renderConfig.isFromMirroredCamera =_livePusher.frontCamera;
+    input.renderConfig.imageOrientation = FUImageOrientationDown;
+    input.renderConfig.isFromFrontCamera = YES;
     input.renderConfig.stickerFlipH = YES;
     FUTexture tex = {texture, CGSizeMake(width, height)};
     input.texture = tex;

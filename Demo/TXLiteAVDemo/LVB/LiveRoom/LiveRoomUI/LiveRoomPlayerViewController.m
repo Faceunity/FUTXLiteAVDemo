@@ -13,7 +13,6 @@
 #import "ColorMacro.h"
 #import "LiveRoomMsgListTableView.h"
 #import "LiveRoomAccPlayerView.h"
-#import "UIViewController+FaceUnityUIExtension.h"
 
 #if DEBUG
 #  define Log NSLog
@@ -262,7 +261,7 @@ typedef NS_ENUM(NSInteger, LinkMicStatus) {
         [_liveRoom requestJoinAnchor:@"" completion:^(int errCode, NSString *errMsg) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (errCode == 0) {
-                    [self setupFaceUnity];
+                    
                     self->_pusherView.hidden = NO;
                     [self->_liveRoom startLocalPreview:YES view:self->_pusherView];
                     [self relayout];
@@ -461,8 +460,6 @@ typedef NS_ENUM(NSInteger, LinkMicStatus) {
     _pusherView.hidden = YES;
     [_btnLinkMic setImage:[UIImage imageNamed:@"linkmic_start"] forState:UIControlStateNormal];
     _linkMicStatus = LinkMicStatus_IDEL;
-    
-    [self removeFaceUnityUI];
     
     // 关闭本地推流和预览，并退出pusher房间
     [_liveRoom stopLocalPreview];
