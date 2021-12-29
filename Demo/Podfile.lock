@@ -1,16 +1,16 @@
 PODS:
-  - TXLiteAVSDK_Professional (8.0.9644)
+  - SVProgressHUD (2.2.5)
 
 DEPENDENCIES:
-  - TXLiteAVSDK_Professional (~> 8.0.9643)
+  - SVProgressHUD
 
 SPEC REPOS:
   trunk:
-    - TXLiteAVSDK_Professional
+    - SVProgressHUD
 
 SPEC CHECKSUMS:
-  TXLiteAVSDK_Professional: a6c4150c76f695ff5b62d64112eb0193bee5c39b
+  SVProgressHUD: 1428aafac632c1f86f62aa4243ec12008d7a51d6
 
-PODFILE CHECKSUM: 2daf036f13b1fb9328bb3adf527d84ca5a3f30c0
+PODFILE CHECKSUM: 377700dbb591e5c02f410a9c94804b7c3d68730a
 
-COCOAPODS: 1.9.3
+COCOAPODS: 1.10.1

@@ -18,7 +18,7 @@
 #import "LiveRoomAccPlayerView.h"
 
 /**faceU */
-#import "UIViewController+FaceUnityUIExtension.h"
+#import "FUDemoManager.h"
 
 
 typedef NS_ENUM(NSInteger, PKStatus) {
@@ -93,7 +93,12 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     [self initRoomLogic];
     
     /**faceU */
-    [self setupFaceUnity];
+    // FaceUnity UI
+    CGFloat safeAreaBottom = 0;
+    if (@available(iOS 11.0, *)) {
+        safeAreaBottom = [UIApplication sharedApplication].delegate.window.safeAreaInsets.bottom;
+    }
+    [FUDemoManager setupFaceUnityDemoInController:self originY:CGRectGetHeight(self.view.frame) - FUBottomBarHeight - safeAreaBottom - 120];
     
 }
 
