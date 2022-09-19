@@ -73,6 +73,8 @@ typedef NS_ENUM(NSInteger, PKStatus) {
 }
 
 @property (strong, nonatomic) MLVBAnchorInfo *pkAnchor;
+@property(nonatomic, strong) FUDemoManager *demoManager;
+
 
 
 @end
@@ -98,7 +100,7 @@ typedef NS_ENUM(NSInteger, PKStatus) {
     if (@available(iOS 11.0, *)) {
         safeAreaBottom = [UIApplication sharedApplication].delegate.window.safeAreaInsets.bottom;
     }
-    [FUDemoManager setupFaceUnityDemoInController:self originY:CGRectGetHeight(self.view.frame) - FUBottomBarHeight - safeAreaBottom - 120];
+    self.demoManager = [[FUDemoManager alloc] initWithTargetController:self originY:CGRectGetHeight(self.view.frame) - FUBottomBarHeight - safeAreaBottom - 120];
     
 }
 

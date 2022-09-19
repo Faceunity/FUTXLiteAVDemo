@@ -114,7 +114,11 @@ static pthread_mutex_t sharedInstanceLock;
     if ([FUGLContext shareGLContext].currentGLContext != [EAGLContext currentContext]) {
         [[FUGLContext shareGLContext] setCustomGLContext:[EAGLContext currentContext]];
     }
+    
     [[FUManager shareManager] updateBeautyBlurEffect];
+    if ([[FUManager shareManager].delegate respondsToSelector:@selector(faceUnityManagerCheckAI)]) {
+        [[FUManager shareManager].delegate faceUnityManagerCheckAI];
+    }
     FURenderInput *input = [[FURenderInput alloc] init];
     input.renderConfig.imageOrientation = FUImageOrientationDown;
     input.renderConfig.isFromFrontCamera = YES;
